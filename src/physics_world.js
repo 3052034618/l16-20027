@@ -61,6 +61,17 @@
             this.gravity = new Vector2(x, y);
         }
 
+        setCellSize(cellSize) {
+            this.spatialGrid = new SpatialGrid(cellSize, this.width, this.height);
+            for (const shape of this.shapes) {
+                this.spatialGrid.insert(shape);
+            }
+        }
+
+        getCellSize() {
+            return this.spatialGrid.cellSize;
+        }
+
         resolveCollision(collision) {
             const { shapeA, shapeB, normal } = collision;
 

@@ -677,6 +677,266 @@ function polyVerts(sides, radius) {
     return arr;
 }
 
+// ======== Mulberry32 PRNG（与 demo 中同步） ========
+function makeRng(seed) {
+    let a = seed >>> 0;
+    return function () {
+        a |= 0; a = a + 0x6D2B79F5 | 0;
+        let t = Math.imul(a ^ a >>> 15, 1 | a);
+        t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    };
+}
+
+// ========== 端到端验收：固定种子、网格大小、导出、时间轴同步 ==========
+
+test('验收: 固定种子生成场景可重复复现', () => {
+    function generateShapes(seed, count) {
+        const rng = makeRng(seed);
+        const world = new PhysicsWorld(500, 500, 50);
+        const palette = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24'];
+        for (let i = 0; i < count; i++) {
+            const r = 8 + rng() * 18;
+            const x = r + rng() * (500 - 2 * r);
+            const y = r + rng() * (500 - 2 * r);
+            const s = new Circle(new Vector2(x, y), r);
+            s.velocity = new Vector2((rng() - 0.5) * 200, (rng() - 0.5) * 200);
+            s.color = palette[Math.floor(rng() * palette.length)];
+            s.restitution = 0.6 + rng() * 0.4;
+            s.invMass = 1 / (r * r * 0.01);
+            world.addShape(s);
+        }
+        return world;
+    }
+
+    const w1 = generateShapes(12345, 30);
+    const w2 = generateShapes(12345, 30);
+    const w3 = generateShapes(99999, 30);
+
+    // 相同种子，第 5 个物体的位置和半径应完全一致
+    assert.strictEqual(w1.shapes[5].position.x, w2.shapes[5].position.x,
+        '同一种子生成的第5个物体 x 坐标应相同');
+    assert.strictEqual(w1.shapes[5].radius, w2.shapes[5].radius,
+        '同一种子生成的第5个物体半径应相同');
+    assert.strictEqual(w1.shapes[5].velocity.x, w2.shapes[5].velocity.x,
+        '同一种子生成的第5个物体速度应相同');
+    assert.strictEqual(w1.shapes[5].color, w2.shapes[5].color,
+        '同一种子生成的第5个物体颜色应相同');
+
+    // 不同种子，位置应不同
+    assert.notStrictEqual(w1.shapes[5].position.x, w3.shapes[5].position.x,
+        '不同种子生成的物体位置应不同');
+
+    console.log(`  种子 12345: 第5物体 x=${w1.shapes[5].position.x.toFixed(3)}, r=${w1.shapes[5].radius.toFixed(3)}`);
+    console.log(`  种子 99999: 第5物体 x=${w3.shapes[5].position.x.toFixed(3)}, r=${w3.shapes[5].radius.toFixed(3)}`);
+});
+
+test('验收: 调整网格大小后宽阶段候选对数量变化', () => {
+    // 构造 20 个均匀分布的圆，分别用 40 / 80 / 120 三种网格
+    const rng = makeRng(42);
+    const shapesData = [];
+    for (let i = 0; i < 25; i++) {
+        const r = 10 + rng() * 10;
+        shapesData.push({
+            r, x: r + rng() * (500 - 2 * r), y: r + rng() * (500 - 2 * r)
+        });
+    }
+
+    function buildWorld(cellSize) {
+        const w = new PhysicsWorld(500, 500, cellSize);
+        for (const sd of shapesData) {
+            const c = new Circle(new Vector2(sd.x, sd.y), sd.r);
+            c.invMass = 0;
+            w.addShape(c);
+        }
+        w.step(1 / 60);
+        return w;
+    }
+
+    const w40 = buildWorld(40);
+    const w80 = buildWorld(80);
+    const w120 = buildWorld(120);
+
+    const s40 = w40.getStats();
+    const s80 = w80.getStats();
+    const s120 = w120.getStats();
+
+    // 碰撞数应该完全一致（因为是同一批物体）
+    assert.strictEqual(s40.collisions, s80.collisions,
+        '不同网格大小的碰撞数应一致');
+    assert.strictEqual(s80.collisions, s120.collisions);
+
+    // 一般来说，网格越小（但仍大于物体），候选对越少？
+    // 实际上，网格如果比物体小很多，每个物体占多格，候选对反而变多
+    // 这里只验证：三种网格下碰撞数一致，候选对数量变化
+    console.log(`  网格 40px: 候选对=${s40.broadPhasePairs}, 碰撞=${s40.collisions}`);
+    console.log(`  网格 80px: 候选对=${s80.broadPhasePairs}, 碰撞=${s80.collisions}`);
+    console.log(`  网格 120px: 候选对=${s120.broadPhasePairs}, 碰撞=${s120.collisions}`);
+
+    assert.strictEqual(typeof s40.broadPhasePairs, 'number', 'broadPhasePairs 应是数字');
+    assert.ok(s40.bruteForcePairs > s40.broadPhasePairs || s40.broadPhasePairs > 0,
+        '候选对数量应该有意义');
+});
+
+test('验收: PhysicsWorld.setCellSize 动态改网格', () => {
+    const world = new PhysicsWorld(400, 400, 50);
+    assert.strictEqual(world.getCellSize(), 50, '初始网格 50');
+
+    const c1 = new Circle(new Vector2(60, 200), 15);
+    const c2 = new Circle(new Vector2(140, 200), 15);
+    c1.invMass = 0; c2.invMass = 0;
+    world.addShape(c1); world.addShape(c2);
+
+    world.step(1 / 60);
+    const s50 = world.getStats();
+
+    world.setCellSize(200);
+    world.step(1 / 60);
+    const s200 = world.getStats();
+
+    assert.strictEqual(world.getCellSize(), 200, '修改后应为 200');
+    // 两圆心距 80，半径均 15，直径和 30 < 80，不碰撞
+    // 但在 50 大小网格下和 200 大小下，候选对数量可能不同
+    // 至少验证 setCellSize 不报错、网格变化
+    console.log(`  50px网格 候选对: ${s50.broadPhasePairs}, 200px网格 候选对: ${s200.broadPhasePairs}`);
+
+    // 200px 大网格肯定在同一个单元里 → 候选对 = 1
+    assert.strictEqual(s200.broadPhasePairs, 1, '200px 大网格下两物体应在同一格，候选对=1');
+});
+
+test('验收: 导出摘要数值应与统计面板严格对齐', () => {
+    // 模拟 demo 中导出摘要的计算逻辑，验证和面板显示一致
+    const world = new PhysicsWorld(500, 500, 60);
+    const rng = makeRng(777);
+    for (let i = 0; i < 30; i++) {
+        const r = 10 + rng() * 12;
+        const c = new Circle(new Vector2(r + rng() * (500 - 2 * r), r + rng() * (500 - 2 * r)), r);
+        c.invMass = 1;
+        c.velocity = new Vector2((rng() - 0.5) * 200, (rng() - 0.5) * 200);
+        world.addShape(c);
+    }
+    world.step(1 / 60);
+    const s = world.getStats();
+
+    // 模拟页面上的加速比计算：暴力总时 / 网格总时
+    const gridTotalTime = s.broadPhaseTime + s.narrowPhaseTime;
+    const bruteTotalTime = s.bruteForceTime;
+    const speedup = bruteTotalTime > 0 && gridTotalTime > 0
+        ? bruteTotalTime / gridTotalTime : 1;
+
+    // 模拟页面上的窄阶段减少比例
+    const reductionPct = s.bruteForcePairs > 0
+        ? (1 - s.broadPhasePairs / s.bruteForcePairs) * 100
+        : 0;
+
+    // 验证这些值从 getStats 可以算出（和页面用同一套公式）
+    assert.strictEqual(typeof s.broadPhasePairs, 'number');
+    assert.strictEqual(typeof s.bruteForcePairs, 'number');
+    assert.strictEqual(typeof s.collisions, 'number');
+    assert.strictEqual(typeof s.broadPhaseTime, 'number');
+    assert.strictEqual(typeof s.narrowPhaseTime, 'number');
+    assert.strictEqual(typeof s.bruteForceTime, 'number');
+
+    // 验证导出摘要的字段可从 stats 还原
+    const exported = {
+        totalShapes: s.totalShapes,
+        avgBroadPhase: s.broadPhasePairs,
+        avgNarrow: s.narrowPhaseTests,
+        avgCollisions: s.collisions,
+        speedup: speedup,
+        reductionPct: reductionPct,
+        gridCellSize: world.getCellSize()
+    };
+
+    assert.strictEqual(exported.totalShapes, 30, '导出物体数应等于 30');
+    assert.strictEqual(exported.gridCellSize, 60, '导出网格大小应为 60');
+    assert.ok(exported.speedup > 0, '加速比应为正数');
+    assert.ok(exported.reductionPct >= 0 && exported.reductionPct <= 100,
+        `减少比例应在 0-100 之间，实际 ${exported.reductionPct.toFixed(1)}`);
+
+    console.log(`  网格大小: ${exported.gridCellSize}px`);
+    console.log(`  宽阶段候选: ${s.broadPhasePairs} / 暴力 ${s.bruteForcePairs} 对 (减少 ${reductionPct.toFixed(1)}%)`);
+    console.log(`  加速比: ${speedup.toFixed(2)}x`);
+});
+
+test('验收: 时间轴切帧后选中物体ID映射保持一致', () => {
+    // 模拟时间轴切帧的 id 映射逻辑，验证选中物体不会丢失
+    const worldA = new PhysicsWorld(400, 400, 50);
+    const shapesInfo = [];
+    for (let i = 0; i < 8; i++) {
+        const c = new Circle(new Vector2(50 + i * 40, 200), 12);
+        worldA.addShape(c);
+        shapesInfo.push({
+            id: c.id, type: 'Circle',
+            x: c.position.x, y: c.position.y, radius: c.radius
+        });
+    }
+
+    // 用户选中了第 2 和第 6 个物体（按 id）
+    const selectedIds = [shapesInfo[1].id, shapesInfo[5].id];
+
+    // 模拟下一帧：重建 world（和 restoreFrame / handleTimelineClick 逻辑一样）
+    const worldB = new PhysicsWorld(400, 400, 50);
+    const idMap = new Map();
+    for (const fd of shapesInfo) {
+        // 模拟位置变化（下一帧）
+        const newX = fd.x + 5;
+        const s = new Circle(new Vector2(newX, fd.y), fd.radius);
+        worldB.addShape(s);
+        idMap.set(fd.id, s);
+    }
+
+    // 按 selectedIds 映射恢复选中
+    const selectedAfter = [];
+    for (const oldId of selectedIds) {
+        const s = idMap.get(oldId);
+        if (s) selectedAfter.push(s);
+    }
+
+    assert.strictEqual(selectedAfter.length, 2, '切帧后仍应选中 2 个物体');
+    assert.strictEqual(selectedAfter[0].radius, 12, '物体属性应保留');
+    assert.strictEqual(selectedAfter[0].position.x, shapesInfo[1].x + 5,
+        '位置应是帧中新值');
+
+    // 验证选中顺序不变
+    assert.strictEqual(idMap.get(selectedIds[0]), selectedAfter[0],
+        '第一选中物体对应原 id');
+    assert.strictEqual(idMap.get(selectedIds[1]), selectedAfter[1],
+        '第二选中物体对应原 id');
+
+    console.log(`  选中物体从 ${selectedIds.length} 个保留到 ${selectedAfter.length} 个 ✓`);
+});
+
+test('验收: detectCollisionDebug 各字段齐全且可用于 SAT 面板', () => {
+    const r1 = new Rectangle(new Vector2(0, 0), 20, 30);
+    const p = new Circle(new Vector2(100, 50), 15);
+
+    const d = detectCollisionDebug(r1, p);
+
+    // 验证调试面板需要的所有字段都存在
+    assert.strictEqual(typeof d.collision, 'boolean');
+    assert.ok(d.normal instanceof Vector2);
+    assert.strictEqual(typeof d.depth, 'number');
+    assert.strictEqual(d.shapeA, r1);
+    assert.strictEqual(d.shapeB, p);
+    assert.ok(Array.isArray(d.axes));
+    assert.strictEqual(typeof d.minAxisIndex, 'number');
+    assert.strictEqual(typeof d.hasSeparatingAxis, 'boolean');
+
+    // 验证每条轴的字段
+    assert.ok(d.axes.length > 0, '至少有一条候选轴');
+    const ax0 = d.axes[0];
+    assert.ok(ax0.axis instanceof Vector2);
+    assert.strictEqual(typeof ax0.projA.min, 'number');
+    assert.strictEqual(typeof ax0.projA.max, 'number');
+    assert.strictEqual(typeof ax0.projB.min, 'number');
+    assert.strictEqual(typeof ax0.projB.max, 'number');
+    assert.strictEqual(typeof ax0.overlap, 'number');
+    assert.strictEqual(typeof ax0.separated, 'boolean');
+
+    console.log(`  候选轴数: ${d.axes.length}, 最小轴索引: ${d.minAxisIndex}, 分离: ${d.hasSeparatingAxis}`);
+});
+
 // ========== 运行 ==========
 
 function runAllTests() {

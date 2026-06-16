@@ -230,6 +230,46 @@
         .exp-meta { margin-top: 6px; padding: 6px; background: rgba(251, 191, 36, 0.08); border-radius: 4px; font-size: 10px; color: #fbbf24; }
         .exp-miss { color: #f87171 !important; font-weight: bold; }
         .exp-ok { color: #4ade80 !important; font-weight: bold; }
+
+        /* ======= 参数调节面板 ======= */
+        .params-panel input[type=range] { width: 100%; accent-color: #00e5ff; }
+        .params-grid { display: grid; grid-template-columns: 1fr 60px; gap: 6px; align-items: center; margin-bottom: 6px; }
+        .params-grid label { font-size: 11px; color: #aaaacc; margin: 0; }
+        .params-grid .val { font-size: 11px; font-weight: bold; color: #00e5ff; text-align: right; font-family: 'Courier New', monospace; }
+        .seed-row { display: flex; gap: 6px; align-items: center; margin-top: 4px; }
+        .seed-row input { flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e0e0ff; padding: 4px 6px; border-radius: 4px; font-size: 11px; }
+        .shape-ratio-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+        .shape-ratio-row input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); color: #e0e0ff; padding: 3px; border-radius: 4px; font-size: 10px; text-align: center; }
+        .shape-ratio-row label { font-size: 10px; color: #8888aa; text-align: center; display: block; }
+
+        /* ======= 时间轴视图 ======= */
+        .timeline-wrap { margin-top: 8px; }
+        .timeline-canvas {
+            width: 100%;
+            height: 120px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 4px;
+            cursor: crosshair;
+            display: block;
+        }
+        .timeline-legend {
+            display: flex;
+            gap: 10px;
+            font-size: 10px;
+            margin-top: 4px;
+            flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+        .timeline-info {
+            margin-top: 4px;
+            padding: 4px 8px;
+            background: rgba(0, 229, 255, 0.08);
+            border-radius: 4px;
+            font-size: 10px;
+            color: #b0e0ff;
+            font-family: 'Courier New', monospace;
+        }
     </style>
 </head>
 <body>
@@ -277,6 +317,52 @@
                         <span class="sc-name">🎯 混合密集</span>
                         <span class="sc-desc">100 个各种形状</span>
                     </button>
+                </div>
+            </div>
+
+            <!-- 实验参数 -->
+            <div class="panel params-panel">
+                <h3>⚙️ 实验参数</h3>
+                <div class="params-grid">
+                    <label>物体数量</label>
+                    <span class="val" id="p-count-val">50</span>
+                    <input type="range" id="p-count" min="5" max="200" value="50" step="5">
+                </div>
+                <div class="params-grid">
+                    <label>速度范围 (px/s)</label>
+                    <span class="val" id="p-speed-val">120</span>
+                    <input type="range" id="p-speed" min="10" max="500" value="120" step="10">
+                </div>
+                <div class="params-grid">
+                    <label>网格大小 (px)</label>
+                    <span class="val" id="p-grid-val">90</span>
+                    <input type="range" id="p-grid" min="20" max="200" value="90" step="5">
+                </div>
+                <div class="shape-ratio-row" style="margin-top:4px;">
+                    <div>
+                        <label>圆形 %</label>
+                        <input type="number" id="p-ratio-circle" value="40" min="0" max="100">
+                    </div>
+                    <div>
+                        <label>矩形 %</label>
+                        <input type="number" id="p-ratio-rect" value="25" min="0" max="100">
+                    </div>
+                    <div>
+                        <label>多边形 %</label>
+                        <input type="number" id="p-ratio-poly" value="35" min="0" max="100">
+                    </div>
+                </div>
+                <div class="seed-row">
+                    <label style="font-size:11px; color:#aaaacc; margin:0; flex-shrink:0;">随机种子:</label>
+                    <input type="number" id="p-seed" value="42" step="1">
+                    <button id="p-randseed" class="secondary" style="padding:3px 6px; font-size:10px;">🎲</button>
+                </div>
+                <div class="row" style="margin-top:8px;">
+                    <button id="btn-generate" class="active">✨ 按参数生成</button>
+                    <button id="btn-apply-grid" class="secondary">套用网格</button>
+                </div>
+                <div class="hint">
+                    固定种子可复现实验；调整网格大小后点「套用网格」即时生效。
                 </div>
             </div>
 
@@ -348,6 +434,21 @@
                     </div>
                 </div>
                 <div class="exp-meta" id="exp-meta" style="display:none;"></div>
+
+                <!-- 时间轴视图 -->
+                <div class="timeline-wrap" id="timeline-wrap" style="display:none;">
+                    <h4 style="font-size:11px; color:#8888aa; margin: 8px 0 4px 0;">📊 时间轴 · 逐帧指标</h4>
+                    <canvas id="timeline-canvas" class="timeline-canvas" width="600" height="120"></canvas>
+                    <div class="timeline-legend">
+                        <div class="legend-item"><span class="legend-dot" style="background:#4ade80;"></span> 网格候选对</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#f87171;"></span> 暴力检测对</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#fbbf24;"></span> 网格碰撞数</div>
+                        <div class="legend-item"><span class="legend-dot" style="background:#a78bfa;"></span> 暴力碰撞数</div>
+                    </div>
+                    <div class="timeline-info" id="timeline-info">
+                        点击时间轴上任意帧恢复场景 · 当前帧: -
+                    </div>
+                </div>
             </div>
 
             <!-- 实时统计 -->
@@ -435,6 +536,31 @@
 
     // 实验对比数据
     let lastExperimentResult = null;
+    let experimentFrames = null;  // { grid: [], brute: [], shapeIds: [] }
+    let expCurrentFrameIdx = -1;  // -1 表示未选中
+    let expViewMode = 'grid';     // 当前时间轴恢复的模式
+
+    // ======== Mulberry32 固定种子 PRNG ========
+    function makeRng(seed) {
+        let a = seed >>> 0;
+        return function () {
+            a |= 0; a = a + 0x6D2B79F5 | 0;
+            let t = Math.imul(a ^ a >>> 15, 1 | a);
+            t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+            return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        };
+    }
+
+    // ======== 参数状态 ========
+    const expParams = {
+        count: 50,
+        speed: 120,
+        gridSize: 90,
+        ratioCircle: 40,
+        ratioRect: 25,
+        ratioPoly: 35,
+        seed: 42
+    };
 
     // ========= 录制回放 =========
     const recorder = {
@@ -827,17 +953,46 @@
         const scene = serializeScene();
         const dt = 1 / 60;
 
+        // 用同一份初始状态分别跑两条路径，收集逐帧数据
         function runPath(useBroad) {
             restoreScene(scene, useBroad);
             world.setGravity(savedGravity ? 600 : 0, 0);
+
+            const frameData = [];
+            const pathCollisionSet = new Set();
             let totalBroad = 0, totalNarrow = 0, totalCollisions = 0;
             let totalBroadTime = 0, totalNarrowTime = 0, totalBruteTime = 0;
             let maxCollisions = 0, maxNarrow = 0, maxBroad = 0;
-            const collisionIds = new Set();
 
             for (let f = 0; f < frames; f++) {
                 world.step(dt);
                 const s = world.getStats();
+
+                // 记录这一帧的物体快照（首帧和有需要时）
+                const frameSnapshot = {
+                    index: f,
+                    broadPhasePairs: s.broadPhasePairs,
+                    narrowPhaseTests: s.narrowPhaseTests,
+                    collisions: s.collisions,
+                    bruteForcePairs: s.bruteForcePairs,
+                    broadPhaseTime: s.broadPhaseTime,
+                    narrowPhaseTime: s.narrowPhaseTime,
+                    bruteForceTime: s.bruteForceTime
+                };
+
+                // 为了时间轴能恢复任意帧，保存每一帧的形状快照
+                frameSnapshot.shapes = world.shapes.map(sh => ({
+                    id: sh.id, type: sh.getType(),
+                    x: sh.position.x, y: sh.position.y,
+                    vx: sh.velocity.x, vy: sh.velocity.y,
+                    radius: sh.radius, width: sh.width, height: sh.height,
+                    vertices: sh.localVertices ? sh.localVertices.map(v => ({ x: v.x, y: v.y })) : null,
+                    color: sh.color, invMass: sh.invMass, restitution: sh.restitution
+                }));
+
+                frameData.push(frameSnapshot);
+
+                // 统计
                 totalBroad += s.broadPhasePairs;
                 totalNarrow += s.narrowPhaseTests;
                 totalCollisions += s.collisions;
@@ -849,68 +1004,31 @@
                 maxBroad = Math.max(maxBroad, s.broadPhasePairs);
             }
 
-            // 单独暴力统计碰撞对 id 用于漏检分析
-            restoreScene(scene, false);
-            world.setGravity(savedGravity ? 600 : 0, 0);
-            const bruteCollisionSet = new Set();
-            for (let f = 0; f < frames; f++) {
-                world.step(dt);
-                const pairs = world.getBruteForcePairs();
-                for (const pair of pairs) {
-                    const col = P.detectCollision(pair.shapeA, pair.shapeB);
-                    if (col.collision) {
-                        const key = pair.shapeA.id < pair.shapeB.id
-                            ? `${pair.shapeA.id}-${pair.shapeB.id}`
-                            : `${pair.shapeB.id}-${pair.shapeA.id}`;
-                        bruteCollisionSet.add(key);
-                    }
-                }
-            }
-
-            // 再跑一遍目标路径，记录检测到的碰撞
-            restoreScene(scene, useBroad);
-            world.setGravity(savedGravity ? 600 : 0, 0);
-            const pathCollisionSet = new Set();
-            for (let f = 0; f < frames; f++) {
-                world.step(dt);
-                const pairs = useBroad
-                    ? world.spatialGrid.getPotentialCollisions()
-                    : world.getBruteForcePairs();
-                for (const pair of pairs) {
-                    const col = P.detectCollision(pair.shapeA, pair.shapeB);
-                    if (col.collision) {
-                        const key = pair.shapeA.id < pair.shapeB.id
-                            ? `${pair.shapeA.id}-${pair.shapeB.id}`
-                            : `${pair.shapeB.id}-${pair.shapeA.id}`;
-                        pathCollisionSet.add(key);
-                    }
-                }
-            }
-
-            let missed = 0;
-            for (const k of bruteCollisionSet) {
-                if (!pathCollisionSet.has(k)) missed++;
-            }
+            // 统计该路径下的唯一碰撞对
+            const collisionPairs = useBroad
+                ? world.spatialGrid.getPotentialCollisions()
+                : world.getBruteForcePairs();
+            // 最后一帧不足以代表全部，我们从帧数据重算——不过这里简单用最后一帧的
+            // 为了准确，重新跑一遍记录全部唯一碰撞对
+            // （为了性能，上面已经跑过一次，这里不再重跑，改用暴力路径作为基准）
 
             return {
                 frames,
                 totalShapes: scene.length,
-                avgBroadPhase: (totalBroad / frames).toFixed(2),
-                avgNarrow: (totalNarrow / frames).toFixed(2),
-                avgCollisions: (totalCollisions / frames).toFixed(2),
+                avgBroadPhase: totalBroad / frames,
+                avgNarrow: totalNarrow / frames,
+                avgCollisions: totalCollisions / frames,
                 maxBroadPhase: maxBroad,
                 maxNarrow,
                 maxCollisions,
                 totalBroadPhase: totalBroad,
                 totalNarrow,
                 totalCollisions,
-                totalBroadTimeMs: totalBroadTime.toFixed(3),
-                totalNarrowTimeMs: totalNarrowTime.toFixed(3),
-                totalTimeMs: (totalBroadTime + totalNarrowTime).toFixed(3),
-                totalBruteTimeMs: totalBruteTime.toFixed(3),
-                uniqueBruteCollisions: bruteCollisionSet.size,
-                uniquePathCollisions: pathCollisionSet.size,
-                missedCollisions: missed,
+                totalBroadTimeMs: totalBroadTime,
+                totalNarrowTimeMs: totalNarrowTime,
+                totalTimeMs: totalBroadTime + totalNarrowTime,
+                totalBruteTimeMs: totalBruteTime,
+                frameData,
                 useBroadPhase: useBroad
             };
         }
@@ -918,12 +1036,73 @@
         const gridRes = runPath(true);
         const bruteRes = runPath(false);
 
+        // 计算漏检数：逐帧比对暴力路径与网格路径的碰撞对集合
+        let totalMissed = 0;
+        let totalGridUnique = 0;
+        let totalBruteUnique = 0;
+        const allBruteKeys = new Set();
+        const allGridKeys = new Set();
+
+        // 我们需要从两条路径的帧数据中分别计算唯一碰撞对
+        // 但帧数据里只有碰撞数，没有碰撞对 ID，所以我们再跑一遍
+        function collectCollisionIds(useBroad) {
+            restoreScene(scene, useBroad);
+            world.setGravity(savedGravity ? 600 : 0, 0);
+            const keySet = new Set();
+            for (let f = 0; f < frames; f++) {
+                world.step(dt);
+                const pairs = useBroad
+                    ? Array.from(world.spatialGrid.getPotentialCollisions())
+                    : world.getBruteForcePairs();
+                for (const pair of pairs) {
+                    const col = P.detectCollision(pair.shapeA, pair.shapeB);
+                    if (col.collision) {
+                        const key = pair.shapeA.id < pair.shapeB.id
+                            ? `${pair.shapeA.id}-${pair.shapeB.id}`
+                            : `${pair.shapeB.id}-${pair.shapeA.id}`;
+                        keySet.add(key);
+                    }
+                }
+            }
+            return keySet;
+        }
+
+        const bruteKeys = collectCollisionIds(false);
+        const gridKeys = collectCollisionIds(true);
+        let missed = 0;
+        for (const k of bruteKeys) {
+            if (!gridKeys.has(k)) missed++;
+        }
+
+        gridRes.uniquePathCollisions = gridKeys.size;
+        gridRes.uniqueBruteCollisions = bruteKeys.size;
+        gridRes.missedCollisions = missed;
+        bruteRes.uniquePathCollisions = bruteKeys.size;
+        bruteRes.uniqueBruteCollisions = bruteKeys.size;
+        bruteRes.missedCollisions = 0;
+
         // 还原用户当前设置
         restoreScene(scene, world.enableBroadPhase);
         world.setCorrectionMode(savedMode);
 
-        lastExperimentResult = { grid: gridRes, brute: bruteRes, timestamp: new Date().toISOString() };
+        experimentFrames = {
+            grid: gridRes.frameData,
+            brute: bruteRes.frameData,
+            shapeIds: scene.length
+        };
+        expCurrentFrameIdx = -1;
+
+        lastExperimentResult = {
+            grid: gridRes,
+            brute: bruteRes,
+            missed,
+            timestamp: new Date().toISOString(),
+            frames
+        };
+
         renderExperimentResult(gridRes, bruteRes);
+        drawTimeline();
+        document.getElementById('timeline-wrap').style.display = 'block';
     }
 
     function renderExperimentResult(gridRes, bruteRes) {
@@ -932,12 +1111,12 @@
             const avgSp = (res.totalBroadPhase > 0 ? (1 - res.avgNarrow / bruteRes.avgNarrow) * 100 : 0).toFixed(1);
             return `<div class="exp-row"><span class="k">物体数:</span><span class="v">${res.totalShapes}</span></div>
                     <div class="exp-row"><span class="k">帧数:</span><span class="v">${res.frames}</span></div>
-                    <div class="exp-row"><span class="k">宽阶段候选对(均):</span><span class="v">${res.avgBroadPhase}</span></div>
-                    <div class="exp-row"><span class="k">窄阶段检测(均):</span><span class="v">${res.avgNarrow}</span></div>
-                    <div class="exp-row"><span class="k">碰撞数(均/峰值):</span><span class="v">${res.avgCollisions} / ${res.maxCollisions}</span></div>
-                    <div class="exp-row"><span class="k">窄阶段总耗时:</span><span class="v">${res.totalNarrowTimeMs}ms</span></div>
-                    <div class="exp-row"><span class="k">宽阶段+窄阶段总时:</span><span class="v">${res.totalTimeMs}ms</span></div>
-                    <div class="exp-row"><span class="k">暴力总耗时(参考):</span><span class="v">${res.totalBruteTimeMs}ms</span></div>
+                    <div class="exp-row"><span class="k">宽阶段候选对(均):</span><span class="v">${res.avgBroadPhase.toFixed(1)}</span></div>
+                    <div class="exp-row"><span class="k">窄阶段检测(均):</span><span class="v">${res.avgNarrow.toFixed(1)}</span></div>
+                    <div class="exp-row"><span class="k">碰撞数(均/峰值):</span><span class="v">${res.avgCollisions.toFixed(1)} / ${res.maxCollisions}</span></div>
+                    <div class="exp-row"><span class="k">窄阶段总耗时:</span><span class="v">${res.totalNarrowTimeMs.toFixed(2)}ms</span></div>
+                    <div class="exp-row"><span class="k">宽阶段+窄阶段总时:</span><span class="v">${res.totalTimeMs.toFixed(2)}ms</span></div>
+                    <div class="exp-row"><span class="k">暴力总耗时(参考):</span><span class="v">${res.totalBruteTimeMs.toFixed(2)}ms</span></div>
                     <div class="exp-row"><span class="k">唯一碰撞对数:</span><span class="v">${res.uniquePathCollisions}</span></div>
                     <div class="exp-row"><span class="k">漏检数:</span><span class="v ${missCls}">${res.missedCollisions}</span></div>
                     ${label === 'grid' ? `<div class="exp-row"><span class="k">相对减少窄阶段:</span><span class="v" style="color:#4ade80;">${avgSp}%</span></div>` : ''}`;
@@ -948,12 +1127,172 @@
 
         const meta = document.getElementById('exp-meta');
         meta.style.display = 'block';
-        const speedup = bruteRes.totalBruteTimeMs > 0 ? (parseFloat(bruteRes.totalTimeMs) / parseFloat(gridRes.totalTimeMs)).toFixed(2) : 'N/A';
+        // 加速比：暴力总时 / 网格总时
+        const speedup = bruteRes.totalBruteTimeMs > 0 && gridRes.totalTimeMs > 0
+            ? (bruteRes.totalBruteTimeMs / gridRes.totalTimeMs).toFixed(2)
+            : '1.00';
         const missCls = gridRes.missedCollisions > 0 ? 'exp-miss' : 'exp-ok';
         meta.innerHTML = `<strong>摘要:</strong> 
-            相对暴力检测加速比 <span style="color:#4ade80; font-weight:bold;">${speedup}x</span> &nbsp;|&nbsp;
-            空间网格漏检 <span class="${missCls}">${gridRes.missedCollisions}</span> / ${bruteRes.uniqueBruteCollisions} 对 &nbsp;|&nbsp;
+            加速比 <span style="color:#4ade80; font-weight:bold;">${speedup}x</span> &nbsp;|&nbsp;
+            网格漏检 <span class="${missCls}">${gridRes.missedCollisions}</span> / ${bruteRes.uniquePathCollisions} 对 &nbsp;|&nbsp;
             生成时间: ${new Date().toLocaleTimeString()}`;
+    }
+
+    // ======== 时间轴绘制 ========
+    function drawTimeline() {
+        if (!experimentFrames) return;
+        const canvas = document.getElementById('timeline-canvas');
+        const ctx = canvas.getContext('2d');
+        const W = canvas.width;
+        const H = canvas.height;
+        const pad = { l: 30, r: 10, t: 8, b: 20 };
+
+        ctx.clearRect(0, 0, W, H);
+
+        const gridFrames = experimentFrames.grid;
+        const bruteFrames = experimentFrames.brute;
+        const nFrames = gridFrames.length;
+        if (nFrames === 0) return;
+
+        // 计算 Y 轴最大值
+        let maxVal = 0;
+        for (let i = 0; i < nFrames; i++) {
+            maxVal = Math.max(maxVal, gridFrames[i].broadPhasePairs, bruteFrames[i].bruteForcePairs,
+                gridFrames[i].collisions, bruteFrames[i].collisions);
+        }
+        maxVal = Math.ceil(maxVal * 1.1);
+
+        const plotW = W - pad.l - pad.r;
+        const plotH = H - pad.t - pad.b;
+
+        // 背景网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 4; i++) {
+            const y = pad.t + (plotH / 4) * i;
+            ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+        }
+
+        // Y 轴刻度
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'right';
+        for (let i = 0; i <= 4; i++) {
+            const val = Math.round(maxVal * (1 - i / 4));
+            const y = pad.t + (plotH / 4) * i;
+            ctx.fillText(val, pad.l - 4, y + 3);
+        }
+
+        // 画曲线
+        function drawLine(data, key, color, lineWidth = 1) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            for (let i = 0; i < nFrames; i++) {
+                const x = pad.l + (i / (nFrames - 1)) * plotW;
+                const y = pad.t + (1 - data[i][key] / maxVal) * plotH;
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        drawLine(bruteFrames, 'bruteForcePairs', 'rgba(248,113,113,0.7)', 1.5);  // 红：暴力对数
+        drawLine(gridFrames, 'broadPhasePairs', 'rgba(74,222,128,0.9)', 1.5);     // 绿：网格候选
+        drawLine(bruteFrames, 'collisions', 'rgba(167,139,250,0.9)', 1.5);       // 紫：暴力碰撞
+        drawLine(gridFrames, 'collisions', 'rgba(251,191,36,0.9)', 1.5);         // 金：网格碰撞
+
+        // 选中帧的竖线
+        if (expCurrentFrameIdx >= 0 && expCurrentFrameIdx < nFrames) {
+            const x = pad.l + (expCurrentFrameIdx / (nFrames - 1)) * plotW;
+            ctx.strokeStyle = 'rgba(0,229,255,0.8)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(x, pad.t); ctx.lineTo(x, H - pad.b); ctx.stroke();
+            ctx.fillStyle = 'rgba(0,229,255,0.2)';
+            ctx.fillRect(x - 1, pad.t, 2, plotH);
+        }
+
+        // X 轴标签
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.font = '9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('0', pad.l, H - 6);
+        ctx.fillText(String(nFrames - 1), W - pad.r, H - 6);
+        ctx.fillText('帧', W / 2, H - 6);
+    }
+
+    // ======== 时间轴交互 ========
+    function handleTimelineClick(e) {
+        if (!experimentFrames) return;
+        const canvas = document.getElementById('timeline-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const x = (e.clientX - rect.left) * (canvas.width / rect.width);
+        const padL = 30, padR = 10;
+        const plotW = canvas.width - padL - padR;
+        const frac = Math.max(0, Math.min(1, (x - padL) / plotW));
+        const idx = Math.round(frac * (experimentFrames.grid.length - 1));
+        if (idx < 0 || idx >= experimentFrames.grid.length) return;
+        expCurrentFrameIdx = idx;
+
+        // 恢复当前查看模式的场景（默认网格模式）
+        const mode = expViewMode;
+        const frame = experimentFrames[mode][idx];
+
+        // 保存当前选中的物体 IDs，用于恢复选中
+        const selIds = selectedIds.slice();
+
+        // 重建 world
+        world.clear();
+        const idMap = new Map();
+        for (const fd of frame.shapes) {
+            let s;
+            const pos = new P.Vector2(fd.x, fd.y);
+            switch (fd.type) {
+                case 'Circle':    s = new P.Circle(pos, fd.radius); break;
+                case 'Rectangle': s = new P.Rectangle(pos, fd.width, fd.height); break;
+                case 'Polygon':
+                    s = new P.Polygon(pos, fd.vertices.map(v => new P.Vector2(v.x, v.y))); break;
+            }
+            if (s) {
+                s.velocity = new P.Vector2(fd.vx, fd.vy);
+                s.color = fd.color; s.invMass = fd.invMass; s.restitution = fd.restitution;
+                world.addShape(s);
+                idMap.set(fd.id, s);
+            }
+        }
+
+        // 恢复选中物体
+        selectedShapes.length = 0;
+        selectedIds.length = 0;
+        for (const oldId of selIds) {
+            const s = idMap.get(oldId);
+            if (s) {
+                selectedShapes.push(s);
+                selectedIds.push(oldId);
+            }
+        }
+
+        // 暂停模拟
+        paused = true;
+        stopPlayback();
+
+        // 更新信息
+        const info = document.getElementById('timeline-info');
+        info.innerHTML = `帧 ${idx} · ${mode === 'grid' ? '🟢 网格模式' : '🔴 暴力模式'} · `
+            + `候选对: ${frame.broadPhasePairs} · 碰撞: ${frame.collisions} · `
+            + `窄阶段: ${frame.narrowPhaseTests}`;
+
+        drawTimeline();
+        updateStatsLive(frame);
+        updateSatDebug();
+    }
+
+    function switchExpViewMode(mode) {
+        expViewMode = mode;
+        if (expCurrentFrameIdx >= 0) {
+            // 重触发点击，重新恢复到同一帧但用新模式
+            const fakeE = { clientX: 0, clientY: 0 };
+            handleTimelineClick(fakeE);
+        }
     }
 
     function exportExperimentSummary() {
@@ -961,29 +1300,42 @@
             alert('请先运行一次对比实验，再导出摘要。');
             return;
         }
-        const { grid, brute, timestamp } = lastExperimentResult;
+        const { grid, brute, missed, timestamp, frames } = lastExperimentResult;
+
+        // 确保数值与页面显示严格对齐
+        const speedup = brute.totalBruteTimeMs > 0 && grid.totalTimeMs > 0
+            ? (brute.totalBruteTimeMs / grid.totalTimeMs)
+            : 1;
+        const reductionPct = brute.avgNarrow > 0
+            ? (1 - grid.avgNarrow / brute.avgNarrow) * 100
+            : 0;
+
         const lines = [
             '=== 2D 碰撞检测实验摘要 ===',
             `生成时间: ${timestamp}`,
             `物体总数: ${grid.totalShapes}`,
-            `实验帧数: ${grid.frames}`,
+            `实验帧数: ${frames}`,
+            `网格大小: ${world.getCellSize ? world.getCellSize() : 'N/A'}`,
             '',
             '-- 空间网格宽阶段 --',
-            `宽阶段候选对(均值): ${grid.avgBroadPhase} (峰值 ${grid.maxBroadPhase})`,
-            `窄阶段检测(均值): ${grid.avgNarrow} (峰值 ${grid.maxNarrow})`,
-            `碰撞数(均值): ${grid.avgCollisions} (峰值 ${grid.maxCollisions})`,
+            `宽阶段候选对(均值): ${grid.avgBroadPhase.toFixed(2)} (峰值 ${grid.maxBroadPhase})`,
+            `窄阶段检测(均值): ${grid.avgNarrow.toFixed(2)} (峰值 ${grid.maxNarrow})`,
+            `碰撞数(均值): ${grid.avgCollisions.toFixed(2)} (峰值 ${grid.maxCollisions})`,
             `唯一碰撞对数: ${grid.uniquePathCollisions}`,
-            `漏检数: ${grid.missedCollisions} / 暴力 ${brute.uniqueBruteCollisions}`,
-            `宽阶段+窄阶段总耗时: ${grid.totalTimeMs}ms`,
+            `漏检数: ${missed} / 暴力基准 ${brute.uniquePathCollisions}`,
+            `宽阶段总耗时: ${grid.totalBroadTimeMs.toFixed(3)}ms`,
+            `窄阶段总耗时: ${grid.totalNarrowTimeMs.toFixed(3)}ms`,
+            `宽+窄总耗时: ${grid.totalTimeMs.toFixed(3)}ms`,
             '',
             '-- 暴力两两检测 --',
-            `窄阶段检测(均值): ${brute.avgNarrow} (峰值 ${brute.maxNarrow})`,
-            `唯一碰撞对数: ${brute.uniqueBruteCollisions}`,
-            `总耗时: ${brute.totalTimeMs}ms`,
+            `窄阶段检测(均值): ${brute.avgNarrow.toFixed(2)} (峰值 ${brute.maxNarrow})`,
+            `唯一碰撞对数: ${brute.uniquePathCollisions}`,
+            `暴力检测总耗时: ${brute.totalBruteTimeMs.toFixed(3)}ms`,
             '',
-            '-- 对比 --',
-            `加速比(暴力总时/网格总时): ${(parseFloat(brute.totalTimeMs) / parseFloat(grid.totalTimeMs)).toFixed(3)}x`,
-            `窄阶段减少比例: ${(1 - parseFloat(grid.avgNarrow) / parseFloat(brute.avgNarrow) * 100).toFixed(1)}%`
+            '-- 对比结论 --',
+            `加速比(暴力总时/网格总时): ${speedup.toFixed(3)}x`,
+            `窄阶段检测减少: ${reductionPct.toFixed(2)}%`,
+            `漏检率: ${brute.uniquePathCollisions > 0 ? (missed / brute.uniquePathCollisions * 100).toFixed(2) : 'N/A'}%`,
         ];
         const txt = lines.join('\n');
         const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
@@ -1241,8 +1593,14 @@
         drawSATDebugLines();
 
         if (!recorder.playing) {
-            const stats = world.getStats();
-            updateStatsLive(stats);
+            // 拖动或暂停时，用实时计算的统计，保证和画面上碰撞显示一致
+            if (dragging || paused) {
+                const liveStats = computeStatsRealtime();
+                updateStatsLive(liveStats);
+            } else {
+                const stats = world.getStats();
+                updateStatsLive(stats);
+            }
         }
     }
 
@@ -1300,6 +1658,11 @@
             const pos = getMouse(e);
             dragging.position.x = pos.x - dragOffset.x;
             dragging.position.y = pos.y - dragOffset.y;
+
+            // 立即重新插入空间网格，确保宽阶段候选对和画面同步
+            world.spatialGrid.clear();
+            for (const s of world.shapes) world.spatialGrid.insert(s);
+
             // 立即刷新调试面板
             if (selectedShapes.length === 2) {
                 updateSatDebug();
@@ -1380,6 +1743,133 @@
             updatePlaybackUI();
         });
     });
+
+    // ======== 参数面板 ========
+    function syncParamUI() {
+        document.getElementById('p-count-val').textContent = expParams.count;
+        document.getElementById('p-speed-val').textContent = expParams.speed;
+        document.getElementById('p-grid-val').textContent = expParams.gridSize;
+    }
+    syncParamUI();
+
+    document.getElementById('p-count').addEventListener('input', e => {
+        expParams.count = parseInt(e.target.value);
+        document.getElementById('p-count-val').textContent = expParams.count;
+    });
+    document.getElementById('p-speed').addEventListener('input', e => {
+        expParams.speed = parseInt(e.target.value);
+        document.getElementById('p-speed-val').textContent = expParams.speed;
+    });
+    document.getElementById('p-grid').addEventListener('input', e => {
+        expParams.gridSize = parseInt(e.target.value);
+        document.getElementById('p-grid-val').textContent = expParams.gridSize;
+    });
+    document.getElementById('p-ratio-circle').addEventListener('input', e => {
+        expParams.ratioCircle = parseInt(e.target.value) || 0;
+    });
+    document.getElementById('p-ratio-rect').addEventListener('input', e => {
+        expParams.ratioRect = parseInt(e.target.value) || 0;
+    });
+    document.getElementById('p-ratio-poly').addEventListener('input', e => {
+        expParams.ratioPoly = parseInt(e.target.value) || 0;
+    });
+    document.getElementById('p-seed').addEventListener('input', e => {
+        expParams.seed = parseInt(e.target.value) || 0;
+    });
+    document.getElementById('p-randseed').addEventListener('click', () => {
+        expParams.seed = Math.floor(Math.random() * 100000);
+        document.getElementById('p-seed').value = expParams.seed;
+    });
+
+    function generateByParams() {
+        const rng = makeRng(expParams.seed);
+        world.clear();
+        selectedShapes.length = 0;
+        selectedIds.length = 0;
+
+        const total = expParams.count;
+        const totalRatio = expParams.ratioCircle + expParams.ratioRect + expParams.ratioPoly;
+        const speed = expParams.speed;
+
+        // 按比例决定每类数量
+        let nCircle = 0, nRect = 0, nPoly = 0;
+        if (totalRatio > 0) {
+            nCircle = Math.round(total * expParams.ratioCircle / totalRatio);
+            nRect = Math.round(total * expParams.ratioRect / totalRatio);
+            nPoly = total - nCircle - nRect;
+        } else {
+            nCircle = total;
+        }
+
+        const palette = ['#ff6b6b', '#4ecdc4', '#45b7d1', '#f9ca24', '#6c5ce7', '#a29bfe', '#fd79a8', '#00b894'];
+
+        for (let i = 0; i < nCircle; i++) {
+            const r = 8 + rng() * 18;
+            const x = r + rng() * (W - 2 * r);
+            const y = r + rng() * (H - 2 * r);
+            const s = new P.Circle(new P.Vector2(x, y), r);
+            s.velocity = new P.Vector2((rng() - 0.5) * 2 * speed, (rng() - 0.5) * 2 * speed);
+            s.color = palette[Math.floor(rng() * palette.length)];
+            s.restitution = 0.6 + rng() * 0.4;
+            s.invMass = 1 / (r * r * 0.01);
+            world.addShape(s);
+        }
+
+        for (let i = 0; i < nRect; i++) {
+            const w = 15 + rng() * 50;
+            const h = 15 + rng() * 50;
+            const x = w / 2 + rng() * (W - w);
+            const y = h / 2 + rng() * (H - h);
+            const s = new P.Rectangle(new P.Vector2(x, y), w, h);
+            s.velocity = new P.Vector2((rng() - 0.5) * 2 * speed, (rng() - 0.5) * 2 * speed);
+            s.color = palette[Math.floor(rng() * palette.length)];
+            s.restitution = 0.6 + rng() * 0.4;
+            s.invMass = 1 / (w * h * 0.005);
+            world.addShape(s);
+        }
+
+        for (let i = 0; i < nPoly; i++) {
+            const sides = 3 + Math.floor(rng() * 5); // 3-7边
+            const radius = 10 + rng() * 20;
+            const verts = [];
+            for (let j = 0; j < sides; j++) {
+                const a = (j / sides) * Math.PI * 2 + rng() * 0.3;
+                const r = radius * (0.7 + rng() * 0.5);
+                verts.push(new P.Vector2(Math.cos(a) * r, Math.sin(a) * r));
+            }
+            const x = radius + rng() * (W - 2 * radius);
+            const y = radius + rng() * (H - 2 * radius);
+            const s = new P.Polygon(new P.Vector2(x, y), verts);
+            s.velocity = new P.Vector2((rng() - 0.5) * 2 * speed, (rng() - 0.5) * 2 * speed);
+            s.color = palette[Math.floor(rng() * palette.length)];
+            s.restitution = 0.6 + rng() * 0.4;
+            s.invMass = 1 / (radius * radius * 0.008);
+            world.addShape(s);
+        }
+
+        // 应用网格大小
+        if (world.setCellSize) {
+            world.setCellSize(expParams.gridSize);
+        }
+
+        updateSatDebug();
+    }
+
+    document.getElementById('btn-generate').addEventListener('click', () => {
+        generateByParams();
+        recorder.frames = [];
+        recorder.currentFrame = 0;
+        updatePlaybackUI();
+    });
+
+    document.getElementById('btn-apply-grid').addEventListener('click', () => {
+        if (world.setCellSize) {
+            world.setCellSize(expParams.gridSize);
+        }
+    });
+
+    // ======== 时间轴事件 ========
+    document.getElementById('timeline-canvas').addEventListener('click', handleTimelineClick);
 
     // 修正模式
     document.getElementById('btn-mode-full').addEventListener('click', () => {

@@ -216,6 +216,20 @@
         .scenario-btn:hover { background: rgba(255,255,255,0.12); }
         .scenario-btn .sc-name { font-weight: bold; display: block; margin-bottom: 2px; }
         .scenario-btn .sc-desc { font-size: 10px; color: #8888aa; }
+
+        /* ======= 实验对比面板 ======= */
+        .exp-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .exp-col { background: rgba(0,0,0,0.3); padding: 8px; border-radius: 5px; }
+        .exp-col h4 { font-size: 11px; color: #8888aa; margin-bottom: 6px; text-align: center; }
+        .exp-col.grid { border-left: 3px solid #4ade80; }
+        .exp-col.brute { border-left: 3px solid #f87171; }
+        .exp-row { display: flex; justify-content: space-between; font-size: 11px; padding: 2px 0; border-bottom: 1px dashed rgba(255,255,255,0.08); }
+        .exp-row:last-child { border-bottom: none; }
+        .exp-row .k { color: #aaaacc; }
+        .exp-row .v { font-weight: bold; color: #00e5ff; }
+        .exp-meta { margin-top: 6px; padding: 6px; background: rgba(251, 191, 36, 0.08); border-radius: 4px; font-size: 10px; color: #fbbf24; }
+        .exp-miss { color: #f87171 !important; font-weight: bold; }
+        .exp-ok { color: #4ade80 !important; font-weight: bold; }
     </style>
 </head>
 <body>
@@ -310,8 +324,30 @@
                     状态: 待机 &nbsp;|&nbsp; 帧: 0 / 0
                 </div>
                 <div class="hint">
-                    录制一段碰撞过程后，可逐帧查看法线、穿透深度和候选对变化，对比不同宽阶段策略。
+                    录制一段碰撞过程后，可逐帧查看法线、穿透深度和候选对变化，对比不同宽阶段策略。切帧时自动保留已选中的物体。
                 </div>
+            </div>
+
+            <!-- 实验对比 -->
+            <div class="panel">
+                <h3>🧪 实验对比 · 暴力 vs 空间网格</h3>
+                <label>对当前场景分别跑 N 帧，并排输出结果：</label>
+                <div class="row">
+                    <button id="btn-exp-run" class="active">▶ 运行对比实验 (60帧)</button>
+                    <button id="btn-exp-run300" class="secondary">⏱ 300帧</button>
+                    <button id="btn-exp-export" class="secondary">📤 导出摘要</button>
+                </div>
+                <div class="exp-compare" id="exp-compare">
+                    <div class="exp-col grid">
+                        <h4>🟢 空间网格宽阶段</h4>
+                        <div id="exp-grid-result" class="hint" style="text-align:center; color:#555577;">未运行</div>
+                    </div>
+                    <div class="exp-col brute">
+                        <h4>🔴 暴力两两检测</h4>
+                        <div id="exp-brute-result" class="hint" style="text-align:center; color:#555577;">未运行</div>
+                    </div>
+                </div>
+                <div class="exp-meta" id="exp-meta" style="display:none;"></div>
             </div>
 
             <!-- 实时统计 -->
@@ -387,6 +423,7 @@
 
     // 选中物体调试
     const selectedShapes = [];
+    const selectedIds = [];
     const MAX_SELECT = 2;
 
     // 拖动
@@ -395,6 +432,9 @@
 
     // 最近碰撞信息
     let lastCollisionDebug = null;
+
+    // 实验对比数据
+    let lastExperimentResult = null;
 
     // ========= 录制回放 =========
     const recorder = {
@@ -430,6 +470,7 @@
 
     function restoreFrame(frame) {
         world.clear();
+        const idMap = new Map();
         for (const fd of frame.shapes) {
             let s;
             const pos = new P.Vector2(fd.x, fd.y);
@@ -451,10 +492,15 @@
                 s.invMass = fd.invMass;
                 s.restitution = fd.restitution;
                 world.addShape(s);
+                idMap.set(fd.id, s);
             }
         }
-        // 重新选中
+        // 按旧 id 映射恢复选中
         selectedShapes.length = 0;
+        for (const oldId of selectedIds) {
+            const s = idMap.get(oldId);
+            if (s) selectedShapes.push(s);
+        }
     }
 
     function updatePlaybackUI() {
@@ -688,13 +734,267 @@
         const idx = selectedShapes.indexOf(shape);
         if (idx >= 0) {
             selectedShapes.splice(idx, 1);
+            selectedIds.splice(idx, 1);
         } else {
             if (selectedShapes.length >= MAX_SELECT) {
                 selectedShapes.shift();
+                selectedIds.shift();
             }
             selectedShapes.push(shape);
+            selectedIds.push(shape.id);
         }
         updateSatDebug();
+    }
+
+    // ========= 实时统计（拖动时即时计算） =========
+    function computeStatsRealtime() {
+        // 宽阶段候选对
+        const broadPairs = world.spatialGrid.getPotentialCollisions();
+        // 暴力对数
+        const n = world.shapes.length;
+        const brutePairs = n * (n - 1) / 2;
+
+        // 窄阶段实际检测
+        let collisions = 0;
+        for (const pair of broadPairs) {
+            const col = P.detectCollision(pair.shapeA, pair.shapeB);
+            if (col.collision) collisions++;
+        }
+
+        return {
+            totalShapes: n,
+            collisions,
+            broadPhasePairs: broadPairs.length,
+            narrowPhaseTests: broadPairs.length,
+            bruteForcePairs: brutePairs
+        };
+    }
+
+    function updateStatsLive(stats, gridTime = 0, bruteTime = 0) {
+        document.getElementById('s-shapes').textContent = stats.totalShapes;
+        document.getElementById('s-collisions').textContent = stats.collisions;
+        document.getElementById('s-broad').textContent = stats.broadPhasePairs;
+        document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
+
+        const gridTotal = gridTime > 0 ? gridTime : (stats.broadPhaseTime || 0) + (stats.narrowPhaseTime || 0);
+        document.getElementById('s-grid-time').textContent = gridTotal.toFixed(2) + 'ms';
+        document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
+        document.getElementById('s-brute-time').textContent = bruteTime > 0 ? bruteTime.toFixed(2) + 'ms' : (stats.bruteForceTime || 0).toFixed(2) + 'ms';
+        document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
+
+        const denomTime = Math.max(gridTotal, 0.01);
+        const speedup = bruteTime > 0 && gridTotal > 0 ? (bruteTime / denomTime) : 1;
+        document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
+        const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
+        document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+    }
+
+    // ========= 实验对比 =========
+    function serializeScene() {
+        return world.shapes.map(s => ({
+            type: s.getType(),
+            x: s.position.x, y: s.position.y,
+            vx: s.velocity.x, vy: s.velocity.y,
+            radius: s.radius, width: s.width, height: s.height,
+            vertices: s.localVertices ? s.localVertices.map(v => ({ x: v.x, y: v.y })) : null,
+            color: s.color, invMass: s.invMass, restitution: s.restitution
+        }));
+    }
+
+    function restoreScene(data, useBroadPhase) {
+        world.clear();
+        world.enableBroadPhase = useBroadPhase;
+        for (const d of data) {
+            let s;
+            const pos = new P.Vector2(d.x, d.y);
+            switch (d.type) {
+                case 'Circle':    s = new P.Circle(pos, d.radius); break;
+                case 'Rectangle': s = new P.Rectangle(pos, d.width, d.height); break;
+                case 'Polygon':
+                    s = new P.Polygon(pos, d.vertices.map(v => new P.Vector2(v.x, v.y))); break;
+            }
+            if (s) {
+                s.velocity = new P.Vector2(d.vx, d.vy);
+                s.color = d.color; s.invMass = d.invMass; s.restitution = d.restitution;
+                world.addShape(s);
+            }
+        }
+    }
+
+    function runExperiment(frames = 60) {
+        const savedGravity = gravityEnabled;
+        const savedMode = world.correctionMode;
+        const scene = serializeScene();
+        const dt = 1 / 60;
+
+        function runPath(useBroad) {
+            restoreScene(scene, useBroad);
+            world.setGravity(savedGravity ? 600 : 0, 0);
+            let totalBroad = 0, totalNarrow = 0, totalCollisions = 0;
+            let totalBroadTime = 0, totalNarrowTime = 0, totalBruteTime = 0;
+            let maxCollisions = 0, maxNarrow = 0, maxBroad = 0;
+            const collisionIds = new Set();
+
+            for (let f = 0; f < frames; f++) {
+                world.step(dt);
+                const s = world.getStats();
+                totalBroad += s.broadPhasePairs;
+                totalNarrow += s.narrowPhaseTests;
+                totalCollisions += s.collisions;
+                totalBroadTime += s.broadPhaseTime;
+                totalNarrowTime += s.narrowPhaseTime;
+                totalBruteTime += s.bruteForceTime;
+                maxCollisions = Math.max(maxCollisions, s.collisions);
+                maxNarrow = Math.max(maxNarrow, s.narrowPhaseTests);
+                maxBroad = Math.max(maxBroad, s.broadPhasePairs);
+            }
+
+            // 单独暴力统计碰撞对 id 用于漏检分析
+            restoreScene(scene, false);
+            world.setGravity(savedGravity ? 600 : 0, 0);
+            const bruteCollisionSet = new Set();
+            for (let f = 0; f < frames; f++) {
+                world.step(dt);
+                const pairs = world.getBruteForcePairs();
+                for (const pair of pairs) {
+                    const col = P.detectCollision(pair.shapeA, pair.shapeB);
+                    if (col.collision) {
+                        const key = pair.shapeA.id < pair.shapeB.id
+                            ? `${pair.shapeA.id}-${pair.shapeB.id}`
+                            : `${pair.shapeB.id}-${pair.shapeA.id}`;
+                        bruteCollisionSet.add(key);
+                    }
+                }
+            }
+
+            // 再跑一遍目标路径，记录检测到的碰撞
+            restoreScene(scene, useBroad);
+            world.setGravity(savedGravity ? 600 : 0, 0);
+            const pathCollisionSet = new Set();
+            for (let f = 0; f < frames; f++) {
+                world.step(dt);
+                const pairs = useBroad
+                    ? world.spatialGrid.getPotentialCollisions()
+                    : world.getBruteForcePairs();
+                for (const pair of pairs) {
+                    const col = P.detectCollision(pair.shapeA, pair.shapeB);
+                    if (col.collision) {
+                        const key = pair.shapeA.id < pair.shapeB.id
+                            ? `${pair.shapeA.id}-${pair.shapeB.id}`
+                            : `${pair.shapeB.id}-${pair.shapeA.id}`;
+                        pathCollisionSet.add(key);
+                    }
+                }
+            }
+
+            let missed = 0;
+            for (const k of bruteCollisionSet) {
+                if (!pathCollisionSet.has(k)) missed++;
+            }
+
+            return {
+                frames,
+                totalShapes: scene.length,
+                avgBroadPhase: (totalBroad / frames).toFixed(2),
+                avgNarrow: (totalNarrow / frames).toFixed(2),
+                avgCollisions: (totalCollisions / frames).toFixed(2),
+                maxBroadPhase: maxBroad,
+                maxNarrow,
+                maxCollisions,
+                totalBroadPhase: totalBroad,
+                totalNarrow,
+                totalCollisions,
+                totalBroadTimeMs: totalBroadTime.toFixed(3),
+                totalNarrowTimeMs: totalNarrowTime.toFixed(3),
+                totalTimeMs: (totalBroadTime + totalNarrowTime).toFixed(3),
+                totalBruteTimeMs: totalBruteTime.toFixed(3),
+                uniqueBruteCollisions: bruteCollisionSet.size,
+                uniquePathCollisions: pathCollisionSet.size,
+                missedCollisions: missed,
+                useBroadPhase: useBroad
+            };
+        }
+
+        const gridRes = runPath(true);
+        const bruteRes = runPath(false);
+
+        // 还原用户当前设置
+        restoreScene(scene, world.enableBroadPhase);
+        world.setCorrectionMode(savedMode);
+
+        lastExperimentResult = { grid: gridRes, brute: bruteRes, timestamp: new Date().toISOString() };
+        renderExperimentResult(gridRes, bruteRes);
+    }
+
+    function renderExperimentResult(gridRes, bruteRes) {
+        function htmlFor(res, label) {
+            const missCls = res.missedCollisions > 0 ? 'exp-miss' : 'exp-ok';
+            const avgSp = (res.totalBroadPhase > 0 ? (1 - res.avgNarrow / bruteRes.avgNarrow) * 100 : 0).toFixed(1);
+            return `<div class="exp-row"><span class="k">物体数:</span><span class="v">${res.totalShapes}</span></div>
+                    <div class="exp-row"><span class="k">帧数:</span><span class="v">${res.frames}</span></div>
+                    <div class="exp-row"><span class="k">宽阶段候选对(均):</span><span class="v">${res.avgBroadPhase}</span></div>
+                    <div class="exp-row"><span class="k">窄阶段检测(均):</span><span class="v">${res.avgNarrow}</span></div>
+                    <div class="exp-row"><span class="k">碰撞数(均/峰值):</span><span class="v">${res.avgCollisions} / ${res.maxCollisions}</span></div>
+                    <div class="exp-row"><span class="k">窄阶段总耗时:</span><span class="v">${res.totalNarrowTimeMs}ms</span></div>
+                    <div class="exp-row"><span class="k">宽阶段+窄阶段总时:</span><span class="v">${res.totalTimeMs}ms</span></div>
+                    <div class="exp-row"><span class="k">暴力总耗时(参考):</span><span class="v">${res.totalBruteTimeMs}ms</span></div>
+                    <div class="exp-row"><span class="k">唯一碰撞对数:</span><span class="v">${res.uniquePathCollisions}</span></div>
+                    <div class="exp-row"><span class="k">漏检数:</span><span class="v ${missCls}">${res.missedCollisions}</span></div>
+                    ${label === 'grid' ? `<div class="exp-row"><span class="k">相对减少窄阶段:</span><span class="v" style="color:#4ade80;">${avgSp}%</span></div>` : ''}`;
+        }
+
+        document.getElementById('exp-grid-result').innerHTML = htmlFor(gridRes, 'grid');
+        document.getElementById('exp-brute-result').innerHTML = htmlFor(bruteRes, 'brute');
+
+        const meta = document.getElementById('exp-meta');
+        meta.style.display = 'block';
+        const speedup = bruteRes.totalBruteTimeMs > 0 ? (parseFloat(bruteRes.totalTimeMs) / parseFloat(gridRes.totalTimeMs)).toFixed(2) : 'N/A';
+        const missCls = gridRes.missedCollisions > 0 ? 'exp-miss' : 'exp-ok';
+        meta.innerHTML = `<strong>摘要:</strong> 
+            相对暴力检测加速比 <span style="color:#4ade80; font-weight:bold;">${speedup}x</span> &nbsp;|&nbsp;
+            空间网格漏检 <span class="${missCls}">${gridRes.missedCollisions}</span> / ${bruteRes.uniqueBruteCollisions} 对 &nbsp;|&nbsp;
+            生成时间: ${new Date().toLocaleTimeString()}`;
+    }
+
+    function exportExperimentSummary() {
+        if (!lastExperimentResult) {
+            alert('请先运行一次对比实验，再导出摘要。');
+            return;
+        }
+        const { grid, brute, timestamp } = lastExperimentResult;
+        const lines = [
+            '=== 2D 碰撞检测实验摘要 ===',
+            `生成时间: ${timestamp}`,
+            `物体总数: ${grid.totalShapes}`,
+            `实验帧数: ${grid.frames}`,
+            '',
+            '-- 空间网格宽阶段 --',
+            `宽阶段候选对(均值): ${grid.avgBroadPhase} (峰值 ${grid.maxBroadPhase})`,
+            `窄阶段检测(均值): ${grid.avgNarrow} (峰值 ${grid.maxNarrow})`,
+            `碰撞数(均值): ${grid.avgCollisions} (峰值 ${grid.maxCollisions})`,
+            `唯一碰撞对数: ${grid.uniquePathCollisions}`,
+            `漏检数: ${grid.missedCollisions} / 暴力 ${brute.uniqueBruteCollisions}`,
+            `宽阶段+窄阶段总耗时: ${grid.totalTimeMs}ms`,
+            '',
+            '-- 暴力两两检测 --',
+            `窄阶段检测(均值): ${brute.avgNarrow} (峰值 ${brute.maxNarrow})`,
+            `唯一碰撞对数: ${brute.uniqueBruteCollisions}`,
+            `总耗时: ${brute.totalTimeMs}ms`,
+            '',
+            '-- 对比 --',
+            `加速比(暴力总时/网格总时): ${(parseFloat(brute.totalTimeMs) / parseFloat(grid.totalTimeMs)).toFixed(3)}x`,
+            `窄阶段减少比例: ${(1 - parseFloat(grid.avgNarrow) / parseFloat(brute.avgNarrow) * 100).toFixed(1)}%`
+        ];
+        const txt = lines.join('\n');
+        const blob = new Blob([txt], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `exp_${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     // ========= SAT 调试面板 =========
@@ -942,25 +1242,12 @@
 
         if (!recorder.playing) {
             const stats = world.getStats();
-            document.getElementById('s-shapes').textContent = stats.totalShapes;
-            document.getElementById('s-collisions').textContent = stats.collisions;
-            document.getElementById('s-broad').textContent = stats.broadPhasePairs;
-            document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
-
-            document.getElementById('s-grid-time').textContent = (stats.broadPhaseTime + stats.narrowPhaseTime).toFixed(2) + 'ms';
-            document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
-            document.getElementById('s-brute-time').textContent = stats.bruteForceTime.toFixed(2) + 'ms';
-            document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
-
-            const speedup = stats.bruteForceTime > 0 ? (stats.bruteForceTime / Math.max(stats.broadPhaseTime + stats.narrowPhaseTime, 0.01)) : 1;
-            document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
-            const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
-            document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+            updateStatsLive(stats);
         }
     }
 
     function update() {
-        if (recorder.recording || recorder.playing) return;
+        if (recorder.playing) return;
         if (paused && !stepOnce) return;
         stepOnce = false;
 
@@ -977,7 +1264,7 @@
 
     function loop() {
         update();
-        if (recorder.recording) {
+        if (recorder.recording && !recorder.playing) {
             recorder.frames.push(captureFrame());
             recorder.currentFrame = recorder.frames.length - 1;
             updatePlaybackUI();
@@ -1013,8 +1300,14 @@
             const pos = getMouse(e);
             dragging.position.x = pos.x - dragOffset.x;
             dragging.position.y = pos.y - dragOffset.y;
+            // 立即刷新调试面板
             if (selectedShapes.length === 2) {
                 updateSatDebug();
+            }
+            // 立即刷新右侧统计（候选对 / 窄阶段 / 碰撞数）
+            if (!recorder.playing) {
+                const liveStats = computeStatsRealtime();
+                updateStatsLive(liveStats);
             }
         }
     });
@@ -1182,6 +1475,11 @@
         paused = true;
         seekFrame(parseInt(e.target.value));
     });
+
+    // 实验对比
+    document.getElementById('btn-exp-run').addEventListener('click', () => runExperiment(60));
+    document.getElementById('btn-exp-run300').addEventListener('click', () => runExperiment(300));
+    document.getElementById('btn-exp-export').addEventListener('click', exportExperimentSummary);
 
     // 初始化一些物体
     for (let i = 0; i < 12; i++) {

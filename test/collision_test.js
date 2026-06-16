@@ -405,6 +405,267 @@ test('验收: addShape / clear / shapes 数量', () => {
     assert.strictEqual(world.shapes.length, 0);
 });
 
+// ========== 新补充：录制/回放/拖动/宽阶段一致性 验收 ==========
+
+test('验收: 帧数据结构可序列化与恢复 (录制/回放基础)', () => {
+    const world = new PhysicsWorld(400, 400, 50);
+    const c = new Circle(new Vector2(100, 100), 15);
+    c.velocity = new Vector2(50, -30);
+    c.invMass = 1;
+    c.restitution = 0.7;
+    const r = new Rectangle(new Vector2(200, 200), 30, 40);
+    r.velocity = new Vector2(-20, 10);
+    world.addShape(c);
+    world.addShape(r);
+    world.step(1 / 60);
+
+    // 模拟 captureFrame
+    function captureFrame(w) {
+        return {
+            shapes: w.shapes.map(s => ({
+                id: s.id, type: s.getType(),
+                x: s.position.x, y: s.position.y,
+                vx: s.velocity.x, vy: s.velocity.y,
+                radius: s.radius, width: s.width, height: s.height,
+                vertices: s.localVertices ? s.localVertices.map(v => ({ x: v.x, y: v.y })) : null,
+                invMass: s.invMass, restitution: s.restitution
+            })),
+            stats: { ...w.getStats() }
+        };
+    }
+
+    const frame = captureFrame(world);
+    assert.strictEqual(frame.shapes.length, 2, '帧应包含2个物体');
+    assert.strictEqual(typeof frame.stats, 'object', '帧应包含stats');
+    assert.strictEqual(frame.shapes[0].type, 'Circle');
+    assert.strictEqual(frame.shapes[1].type, 'Rectangle');
+    assert.strictEqual(typeof frame.shapes[0].x, 'number');
+    assert.strictEqual(typeof frame.shapes[0].vx, 'number');
+
+    // 恢复到新 world 并验证属性保留
+    const world2 = new PhysicsWorld(400, 400, 50);
+    world2.clear();
+    const idMap = new Map();
+    for (const fd of frame.shapes) {
+        let s;
+        const pos = new Vector2(fd.x, fd.y);
+        if (fd.type === 'Circle') s = new Circle(pos, fd.radius);
+        else if (fd.type === 'Rectangle') s = new Rectangle(pos, fd.width, fd.height);
+        else if (fd.type === 'Polygon') s = new Polygon(pos, fd.vertices.map(v => new Vector2(v.x, v.y)));
+        if (s) {
+            s.velocity = new Vector2(fd.vx, fd.vy);
+            s.invMass = fd.invMass;
+            s.restitution = fd.restitution;
+            world2.addShape(s);
+            idMap.set(fd.id, s);
+        }
+    }
+    assert.strictEqual(world2.shapes.length, 2, '恢复后应有2个物体');
+    assert.ok(Math.abs(world2.shapes[0].position.x - c.position.x) < 0.001, '位置应还原');
+    assert.ok(Math.abs(world2.shapes[0].velocity.x - c.velocity.x) < 0.001, '速度应还原');
+    assert.strictEqual(world2.shapes[0].restitution, 0.7, 'restitution 应还原');
+});
+
+test('验收: 录制多帧时物理状态逐帧变化', () => {
+    const world = new PhysicsWorld(400, 400, 50);
+    const c = new Circle(new Vector2(100, 200), 15);
+    c.velocity = new Vector2(60, 0);
+    c.invMass = 1;
+    world.addShape(c);
+
+    const frames = [];
+    for (let i = 0; i < 10; i++) {
+        world.step(1 / 60);
+        frames.push({
+            x: world.shapes[0].position.x,
+            stats: { ...world.getStats() }
+        });
+    }
+
+    // 物体向右运动，x 应单调递增
+    for (let i = 1; i < frames.length; i++) {
+        assert.ok(frames[i].x > frames[i - 1].x, `第${i}帧x应大于前一帧: ${frames[i].x.toFixed(2)} > ${frames[i - 1].x.toFixed(2)}`);
+    }
+    const totalMove = frames[9].x - frames[0].x;
+    assert.ok(totalMove > 0.5, `10帧累计位移应 > 0.5，实际 ${totalMove.toFixed(3)}`);
+
+    // 每帧都有 stats
+    for (const f of frames) {
+        assert.strictEqual(f.stats.totalShapes, 1, '每帧stats应包含totalShapes');
+        assert.strictEqual(typeof f.stats.broadPhasePairs, 'number');
+    }
+    console.log(`  10帧累计位移: ${totalMove.toFixed(3)} 像素`);
+});
+
+test('验收: 选中ID映射机制 - 切帧不丢选中对象', () => {
+    // 模拟 demo 中 selectedIds + idMap 的恢复逻辑
+    const worldA = new PhysicsWorld(400, 400, 50);
+    const s1 = new Circle(new Vector2(50, 50), 10);
+    const s2 = new Rectangle(new Vector2(150, 150), 20, 20);
+    const s3 = new Circle(new Vector2(250, 250), 10);
+    worldA.addShape(s1); worldA.addShape(s2); worldA.addShape(s3);
+
+    // 用户选中了 s1 和 s3（按 ID）
+    const selectedIds = [s1.id, s3.id];
+
+    // 序列化帧
+    const frame = worldA.shapes.map(sh => ({
+        id: sh.id, type: sh.getType(),
+        x: sh.position.x + 10, y: sh.position.y, // 模拟下一帧位置变化
+        radius: sh.radius, width: sh.width, height: sh.height,
+        vertices: sh.localVertices ? sh.localVertices.map(v => ({ x: v.x, y: v.y })) : null,
+        vx: 0, vy: 0, invMass: 1, restitution: 0.5
+    }));
+
+    // 切到下一帧，restoreFrame 重建 world
+    const worldB = new PhysicsWorld(400, 400, 50);
+    worldB.clear();
+    const idMap = new Map();
+    for (const fd of frame) {
+        let s;
+        const pos = new Vector2(fd.x, fd.y);
+        if (fd.type === 'Circle') s = new Circle(pos, fd.radius);
+        else s = new Rectangle(pos, fd.width, fd.height);
+        worldB.addShape(s);
+        idMap.set(fd.id, s);
+    }
+
+    // 按 selectedIds 映射恢复
+    const selectedAfter = [];
+    for (const oldId of selectedIds) {
+        const ss = idMap.get(oldId);
+        if (ss) selectedAfter.push(ss);
+    }
+    assert.strictEqual(selectedAfter.length, 2, '切帧后仍应保留2个选中物体');
+    assert.ok(selectedAfter[0].getType() === 'Circle', '第一个选中物体仍是 Circle');
+    assert.ok(selectedAfter[1].getType() === 'Circle', '第二个选中物体仍是 Circle');
+    assert.strictEqual(selectedAfter[0].position.x, 60, '位置应是帧中新值');
+});
+
+test('验收: 物体移动后宽阶段候选对数量即时变化 (拖动统计刷新)', () => {
+    const world = new PhysicsWorld(400, 400, 50);
+    // 两个远离的圆
+    const c1 = new Circle(new Vector2(30, 200), 15);
+    const c2 = new Circle(new Vector2(370, 200), 15);
+    c1.invMass = 0; c2.invMass = 0;
+    world.addShape(c1); world.addShape(c2);
+    world.step(1 / 60);
+
+    const farStats = world.getStats();
+    assert.strictEqual(farStats.bruteForcePairs, 1, '暴力永远 1 对');
+    assert.strictEqual(farStats.broadPhasePairs, 0, '远离时宽阶段 0 对候选');
+
+    // 靠近：把 c2 移到 c1 旁边（同一网格）
+    c2.position.x = 50;
+    c2.position.y = 200;
+    world.spatialGrid.clear();
+    for (const s of world.shapes) world.spatialGrid.insert(s);
+
+    // 模拟 computeStatsRealtime 直接计算
+    const broadNearSet = world.spatialGrid.getPotentialCollisions();
+    const broadNear = Array.from(broadNearSet);
+    let collisionsNear = 0;
+    for (const pair of broadNear) {
+        if (detectCollision(pair.shapeA, pair.shapeB).collision) collisionsNear++;
+    }
+    assert.ok(broadNear.length >= 1, `靠近时宽阶段应返回至少 1 对候选，实际 ${broadNear.length}`);
+    assert.strictEqual(collisionsNear, 1, '靠近时应检测到 1 次碰撞');
+
+    // 再移开
+    c2.position.x = 370;
+    world.spatialGrid.clear();
+    for (const s of world.shapes) world.spatialGrid.insert(s);
+    const broadFarSet2 = world.spatialGrid.getPotentialCollisions();
+    const broadFar2 = Array.from(broadFarSet2);
+    let collisionsFar2 = 0;
+    for (const pair of broadFar2) {
+        if (detectCollision(pair.shapeA, pair.shapeB).collision) collisionsFar2++;
+    }
+    assert.strictEqual(collisionsFar2, 0, '移远后不应有碰撞');
+    console.log(`  远离候选: ${farStats.broadPhasePairs} 对, 靠近候选: ${broadNear.length} 对, 移远: ${broadFar2.length} 对`);
+});
+
+test('验收: 开启/关闭宽阶段 碰撞数量应一致', () => {
+    function makeWorld(useBroad, seedShapes) {
+        const w = new PhysicsWorld(500, 500, 50);
+        w.enableBroadPhase = useBroad;
+        for (const sd of seedShapes) {
+            let s;
+            if (sd.type === 'Circle') s = new Circle(new Vector2(sd.x, sd.y), sd.radius);
+            else s = new Rectangle(new Vector2(sd.x, sd.y), sd.w, sd.h);
+            s.invMass = 0; s.velocity = new Vector2(0, 0);
+            w.addShape(s);
+        }
+        return w;
+    }
+
+    // 构造一批分布：有些近有些远
+    const seeds = [];
+    for (let i = 0; i < 25; i++) {
+        const r = 12;
+        seeds.push({
+            type: i % 3 === 0 ? 'Rectangle' : 'Circle',
+            x: 30 + (i % 5) * 90,
+            y: 30 + Math.floor(i / 5) * 90,
+            radius: r, w: r * 2.2, h: r * 1.8
+        });
+    }
+    // 再加几对故意重叠的
+    seeds.push({ type: 'Circle', x: 80, y: 80, radius: 20 });
+    seeds.push({ type: 'Circle', x: 95, y: 85, radius: 20 });
+
+    const wGrid = makeWorld(true, seeds);
+    const wBrute = makeWorld(false, seeds);
+
+    wGrid.step(1 / 60);
+    wBrute.step(1 / 60);
+
+    const gridCollisions = wGrid.getStats().collisions;
+    const bruteCollisions = wBrute.getStats().collisions;
+
+    assert.strictEqual(gridCollisions, bruteCollisions,
+        `宽阶段开启/关闭碰撞数应一致: grid=${gridCollisions}, brute=${bruteCollisions}`);
+    assert.ok(wGrid.getStats().broadPhasePairs <= wGrid.getStats().bruteForcePairs,
+        '网格宽阶段候选应 <= 暴力对数');
+
+    console.log(`  碰撞数: 网格=${gridCollisions}, 暴力=${bruteCollisions} (相同 ✓)`);
+    console.log(`  候选对: 网格=${wGrid.getStats().broadPhasePairs}, 暴力=${wGrid.getStats().bruteForcePairs}`);
+});
+
+test('验收: detectCollisionDebug 在临界位置随移动变化', () => {
+    const c1 = new Circle(new Vector2(0, 0), 10);
+    const c2 = new Circle(new Vector2(25, 0), 10);
+
+    // 距离 25 > 20，未碰撞
+    let d1 = detectCollisionDebug(c1, c2);
+    assert.strictEqual(d1.collision, false);
+    assert.ok(d1.hasSeparatingAxis === true, '未碰撞应有分离轴');
+
+    // 移到 19，接近临界
+    c2.position.x = 19;
+    let d2 = detectCollisionDebug(c1, c2);
+    assert.strictEqual(d2.collision, true, '距离19应碰撞');
+    assert.strictEqual(d2.depth, 1, '深度应为1');
+    assert.ok(d2.minAxisIndex >= 0);
+
+    // 再移远
+    c2.position.x = 100;
+    let d3 = detectCollisionDebug(c1, c2);
+    assert.strictEqual(d3.collision, false);
+    assert.ok(d3.axes.length >= 1, '候选轴不应为空');
+
+    // 验证所有字段连续性
+    for (const d of [d1, d2, d3]) {
+        assert.ok('collision' in d && 'normal' in d && 'depth' in d);
+        assert.ok('axes' in d && 'minAxisIndex' in d && 'hasSeparatingAxis' in d);
+        for (const ax of d.axes) {
+            assert.ok('axis' in ax && 'projA' in ax && 'projB' in ax);
+            assert.ok('overlap' in ax && 'separated' in ax);
+        }
+    }
+    console.log(`  距离25: 分离, 距离19: 碰撞(depth=1), 距离100: 分离 — 临界变化正确`);
+});
+
 // ========== 工具 ==========
 
 function polyVerts(sides, radius) {

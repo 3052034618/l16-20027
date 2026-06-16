@@ -3,587 +3,770 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>2D 物理碰撞检测引擎演示</title>
+    <title>2D 物理碰撞检测引擎 - 完整演示</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
+        * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 100%);
             min-height: 100vh;
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 20px;
-            color: #fff;
+            padding: 15px;
+            color: #e0e0ff;
         }
-
-        h1 {
-            margin-bottom: 10px;
-            color: #00d4ff;
-            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
-        }
-
-        .subtitle {
-            color: #8892b0;
-            margin-bottom: 20px;
-        }
-
-        .container {
+        h1 { color: #00e5ff; margin-bottom: 5px; text-shadow: 0 0 10px rgba(0, 229, 255, 0.4); }
+        .subtitle { color: #8888aa; margin-bottom: 15px; font-size: 13px; }
+        .main-layout {
             display: flex;
-            gap: 20px;
+            gap: 15px;
             flex-wrap: wrap;
             justify-content: center;
+            width: 100%;
+            max-width: 1600px;
         }
-
-        .canvas-container {
+        .canvas-wrap {
             position: relative;
             border-radius: 10px;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
         }
-
         canvas {
             display: block;
             background: #0a0a1a;
             cursor: crosshair;
         }
-
+        .side-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            width: 340px;
+            max-height: 720px;
+            overflow-y: auto;
+        }
         .panel {
-            background: rgba(255, 255, 255, 0.05);
+            background: rgba(255, 255, 255, 0.04);
             backdrop-filter: blur(10px);
             border-radius: 10px;
-            padding: 20px;
-            min-width: 280px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
-
-        .panel h2 {
-            color: #00d4ff;
-            margin-bottom: 15px;
-            font-size: 18px;
-            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
-            padding-bottom: 8px;
-        }
-
-        .control-group {
-            margin-bottom: 15px;
-        }
-
-        .control-group label {
-            display: block;
-            margin-bottom: 5px;
-            color: #8892b0;
+        .panel h3 {
+            color: #00e5ff;
+            margin-bottom: 10px;
             font-size: 14px;
+            border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+            padding-bottom: 6px;
         }
-
-        .btn-group {
-            display: flex;
-            gap: 8px;
-            flex-wrap: wrap;
-        }
-
+        .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+        .row:last-child { margin-bottom: 0; }
         button {
-            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
-            color: #0a0a1a;
+            background: linear-gradient(135deg, #00b8d4 0%, #00838f 100%);
+            color: #fff;
             border: none;
-            padding: 8px 16px;
+            padding: 6px 12px;
             border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
-            transition: all 0.3s ease;
-            font-size: 13px;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
-        }
-
-        button.active {
-            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
-            color: #fff;
-        }
-
-        button.secondary {
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-        }
-
-        button.secondary:hover {
-            background: rgba(255, 255, 255, 0.2);
-        }
-
-        .stats {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
-        .stat-item {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px;
-            border-radius: 5px;
-            text-align: center;
-        }
-
-        .stat-value {
-            font-size: 24px;
-            font-weight: bold;
-            color: #00d4ff;
-        }
-
-        .stat-label {
-            font-size: 11px;
-            color: #8892b0;
-            margin-top: 3px;
-        }
-
-        .instructions {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(0, 212, 255, 0.1);
-            border-radius: 8px;
-            border-left: 3px solid #00d4ff;
-        }
-
-        .instructions h3 {
-            color: #00d4ff;
-            margin-bottom: 10px;
-            font-size: 14px;
-        }
-
-        .instructions ul {
-            list-style: none;
+            transition: all 0.2s;
             font-size: 12px;
-            color: #ccd6f6;
         }
-
-        .instructions li {
-            margin-bottom: 5px;
-            padding-left: 15px;
+        button:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0, 184, 212, 0.4); }
+        button.active { background: linear-gradient(135deg, #ff4081 0%, #c2185b 100%); color: #fff; }
+        button.secondary { background: rgba(255,255,255,0.08); color: #e0e0ff; border: 1px solid rgba(255,255,255,0.15); }
+        button.secondary:hover { background: rgba(255,255,255,0.15); }
+        label { font-size: 12px; color: #aaaacc; display: block; margin-bottom: 4px; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+        .stat { background: rgba(0,0,0,0.3); padding: 6px 8px; border-radius: 4px; text-align: center; }
+        .stat .v { font-size: 16px; font-weight: bold; color: #00e5ff; }
+        .stat .l { font-size: 10px; color: #8888aa; margin-top: 2px; }
+        .perf-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px; }
+        .perf-col { background: rgba(0,0,0,0.25); padding: 8px; border-radius: 5px; text-align: center; }
+        .perf-col h4 { font-size: 11px; color: #8888aa; margin-bottom: 4px; }
+        .perf-col .val { font-size: 14px; font-weight: bold; }
+        .perf-col.good .val { color: #4ade80; }
+        .perf-col.bad .val { color: #f87171; }
+        .info-box {
+            background: rgba(0, 229, 255, 0.08);
+            border-left: 3px solid #00e5ff;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #b0e0ff;
+            line-height: 1.5;
+        }
+        .sat-debug {
+            max-height: 300px;
+            overflow-y: auto;
+            font-size: 11px;
+        }
+        .axis-row {
+            display: grid;
+            grid-template-columns: 24px 1fr 70px 50px;
+            gap: 4px;
+            align-items: center;
+            padding: 3px 5px;
+            border-radius: 3px;
+            margin-bottom: 2px;
+            background: rgba(0,0,0,0.25);
+        }
+        .axis-row.selected { background: rgba(74, 222, 128, 0.2); border: 1px solid rgba(74, 222, 128, 0.5); }
+        .axis-row.separated { opacity: 0.5; }
+        .axis-idx { font-weight: bold; color: #8888aa; text-align: center; }
+        .axis-vec { font-family: 'Courier New', monospace; color: #aaaacc; font-size: 10px; }
+        .axis-overlap { text-align: right; font-weight: bold; }
+        .axis-overlap.min { color: #4ade80; }
+        .axis-status { text-align: center; font-size: 10px; }
+        .proj-bar {
+            display: flex;
+            gap: 2px;
+            height: 8px;
+            margin-top: 2px;
             position: relative;
         }
-
-        .instructions li::before {
-            content: '→';
-            position: absolute;
-            left: 0;
-            color: #00d4ff;
+        .proj-a, .proj-b {
+            border-radius: 2px;
+            font-size: 0;
         }
-
-        .show-grid {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            margin-top: 10px;
+        .proj-a { background: #00e5ff; }
+        .proj-b { background: #ff4081; }
+        .axis-detail {
+            font-size: 10px;
+            color: #8888aa;
+            margin-top: 2px;
+            grid-column: 1 / -1;
+            font-family: 'Courier New', monospace;
         }
-
-        .show-grid input {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
+        .selected-info {
+            margin-top: 8px;
+            padding: 8px;
+            background: rgba(74, 222, 128, 0.08);
+            border-radius: 4px;
+            border: 1px solid rgba(74, 222, 128, 0.3);
+            font-size: 11px;
+            color: #bbf7d0;
         }
-
-        .collision-info {
-            margin-top: 15px;
-            padding: 10px;
-            background: rgba(255, 107, 107, 0.2);
-            border-radius: 5px;
-            font-size: 12px;
-            display: none;
+        .mode-indicator {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
         }
-
-        .collision-info.active {
-            display: block;
-        }
+        .mode-indicator.full { background: #ff4081; color: white; }
+        .mode-indicator.stable { background: #4ade80; color: #0a0a1a; }
+        .hint { font-size: 11px; color: #666688; line-height: 1.5; margin-top: 4px; }
+        .section-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
     </style>
 </head>
 <body>
     <h1>2D 物理碰撞检测引擎</h1>
-    <p class="subtitle">基于分离轴定理 (SAT) + 空间网格宽阶段剔除</p>
+    <p class="subtitle">分离轴定理 (SAT) · 空间网格宽阶段 · 两种碰撞修正模式</p>
 
-    <div class="container">
-        <div class="canvas-container">
-            <canvas id="canvas" width="800" height="600"></canvas>
+    <div class="main-layout">
+        <div class="canvas-wrap">
+            <canvas id="canvas" width="900" height="700"></canvas>
         </div>
 
-        <div class="panel">
-            <h2>控制面板</h2>
-
-            <div class="control-group">
-                <label>创建物体类型：</label>
-                <div class="btn-group">
+        <div class="side-panel">
+            <!-- 创建物体 -->
+            <div class="panel">
+                <h3>🎨 创建物体</h3>
+                <label>选择类型后点击画布创建：</label>
+                <div class="row">
                     <button id="btn-circle" class="active">圆形</button>
                     <button id="btn-rect">矩形</button>
                     <button id="btn-triangle">三角形</button>
                     <button id="btn-pentagon">五边形</button>
+                    <button id="btn-hexagon">六边形</button>
+                </div>
+                <div class="row">
+                    <button id="btn-spawn" class="secondary">🎲 随机生成10个</button>
+                    <button id="btn-spawn-many" class="secondary">🚀 生成50个</button>
+                    <button id="btn-clear" class="secondary">🗑️ 清空</button>
                 </div>
             </div>
 
-            <div class="control-group">
-                <label>操作：</label>
-                <div class="btn-group">
-                    <button id="btn-clear" class="secondary">清空</button>
-                    <button id="btn-spawn" class="secondary">随机生成</button>
-                    <button id="btn-gravity" class="secondary">开启重力</button>
+            <!-- 运行控制 -->
+            <div class="panel">
+                <h3>⚙️ 运行设置</h3>
+                <label>碰撞修正模式：</label>
+                <div class="row">
+                    <button id="btn-mode-full">完全分离</button>
+                    <button id="btn-mode-stable" class="active">稳定(带容差)</button>
+                </div>
+                <label>宽阶段（空间网格）：</label>
+                <div class="row">
+                    <button id="btn-broad-on" class="active">✓ 开启</button>
+                    <button id="btn-broad-off">✗ 关闭</button>
+                </div>
+                <label>物理模拟：</label>
+                <div class="row">
+                    <button id="btn-gravity" class="secondary">🌍 重力</button>
+                    <button id="btn-pause" class="secondary">⏸️ 暂停</button>
+                    <button id="btn-step" class="secondary">⏭️ 单步</button>
+                </div>
+                <label>可视化：</label>
+                <div class="row">
+                    <button id="btn-grid" class="active">显示网格</button>
+                    <button id="btn-normals" class="active">显示法线</button>
+                    <button id="btn-aabb" class="secondary">显示AABB</button>
                 </div>
             </div>
 
-            <div class="show-grid">
-                <input type="checkbox" id="show-grid" checked>
-                <label for="show-grid" style="margin: 0; cursor: pointer;">显示空间网格</label>
+            <!-- 实时统计 -->
+            <div class="panel">
+                <h3>📊 实时统计</h3>
+                <div class="stats-grid">
+                    <div class="stat"><div class="v" id="s-shapes">0</div><div class="l">物体总数</div></div>
+                    <div class="stat"><div class="v" id="s-collisions">0</div><div class="l">碰撞数</div></div>
+                    <div class="stat"><div class="v" id="s-broad">0</div><div class="l">宽阶段候选对</div></div>
+                    <div class="stat"><div class="v" id="s-narrow">0</div><div class="l">窄阶段检测</div></div>
+                </div>
+                <div class="perf-compare">
+                    <div class="perf-col good">
+                        <h4>空间网格（开启）</h4>
+                        <div class="val" id="s-grid-time">0.00ms</div>
+                        <div class="val" id="s-grid-pairs">0 对</div>
+                    </div>
+                    <div class="perf-col bad">
+                        <h4>暴力两两检测</h4>
+                        <div class="val" id="s-brute-time">0.00ms</div>
+                        <div class="val" id="s-brute-pairs">0 对</div>
+                    </div>
+                </div>
+                <div class="info-box" style="margin-top:8px;">
+                    <strong>加速比：<span id="s-speedup" style="color:#4ade80;font-size:14px;">1.00x</span></strong>
+                    <br>宽阶段减少检测：<span id="s-reduction">0%</span>
+                </div>
             </div>
 
-            <div class="stats">
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-shapes">0</div>
-                    <div class="stat-label">物体总数</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-broad">0</div>
-                    <div class="stat-label">宽阶段对</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-narrow">0</div>
-                    <div class="stat-label">窄阶段检测</div>
-                </div>
-                <div class="stat-item">
-                    <div class="stat-value" id="stat-collisions">0</div>
-                    <div class="stat-label">碰撞数</div>
+            <!-- SAT 调试面板 -->
+            <div class="panel">
+                <h3>🔬 SAT 调试面板
+                    <span class="mode-indicator" id="s-mode-indicator" style="display:none;">选中2个物体</span>
+                </h3>
+                <div class="hint">在画布上点击选中两个物体（会高亮），即可查看每条候选轴的详细信息。</div>
+                <div class="selected-info" id="s-selected-info" style="display:none;"></div>
+                <div id="sat-axes-container" class="sat-debug" style="margin-top:8px;">
+                    <div class="hint" style="text-align:center; color:#555577; padding:20px 0;">
+                        请先选择两个物体查看 SAT 计算过程
+                    </div>
                 </div>
             </div>
 
-            <div class="collision-info" id="collision-info">
-                <strong style="color: #ff6b6b;">碰撞检测中...</strong>
-            </div>
-
-            <div class="instructions">
-                <h3>使用说明</h3>
-                <ul>
-                    <li>点击画布创建选中类型的物体</li>
-                    <li>拖拽物体可以移动它</li>
-                    <li>红色边框表示正在碰撞</li>
-                    <li>绿色线条显示碰撞法线方向</li>
-                    <li>空间网格将碰撞检测从 O(n²) 降至近似 O(n)</li>
-                </ul>
+            <!-- 碰撞详情 -->
+            <div class="panel">
+                <h3>💥 最近碰撞详情</h3>
+                <div id="s-last-collision" class="hint" style="color:#555577;">暂无碰撞数据</div>
             </div>
         </div>
     </div>
 
+    <!-- 脚本按依赖顺序加载 -->
     <script src="./src/shapes.js"></script>
     <script src="./src/sat.js"></script>
     <script src="./src/spatial_grid.js"></script>
     <script src="./src/physics_world.js"></script>
 
     <script>
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
+    const P = window.Physics2D;
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
 
-        let currentShape = 'circle';
-        let showGrid = true;
-        let gravityEnabled = false;
-        let dragging = null;
-        let dragOffset = { x: 0, y: 0 };
+    let currentShape = 'circle';
+    let showGrid = true;
+    let showNormals = true;
+    let showAABB = false;
+    let gravityEnabled = false;
+    let paused = false;
+    let stepOnce = false;
 
-        const world = new PhysicsWorld(800, 600, 80);
+    const world = new P.PhysicsWorld(W, H, 90);
 
-        function createPolygonVertices(sides, radius) {
-            const vertices = [];
-            for (let i = 0; i < sides; i++) {
-                const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
-                vertices.push(new Vector2(
-                    Math.cos(angle) * radius,
-                    Math.sin(angle) * radius
-                ));
-            }
-            return vertices;
+    // 选中物体调试
+    const selectedShapes = [];
+    const MAX_SELECT = 2;
+
+    // 拖动
+    let dragging = null;
+    let dragOffset = { x: 0, y: 0 };
+
+    // 最近碰撞信息
+    let lastCollisionDebug = null;
+
+    // ========= 工具函数 =========
+    function polyVerts(sides, radius) {
+        const arr = [];
+        for (let i = 0; i < sides; i++) {
+            const a = (i / sides) * Math.PI * 2 - Math.PI / 2;
+            arr.push(new P.Vector2(Math.cos(a) * radius, Math.sin(a) * radius));
         }
+        return arr;
+    }
 
-        function createShape(type, x, y) {
-            const pos = new Vector2(x, y);
-            let shape;
-
-            switch (type) {
-                case 'circle':
-                    shape = new Circle(pos, 20 + Math.random() * 15);
-                    break;
-                case 'rect':
-                    shape = new Rectangle(pos, 40 + Math.random() * 30, 30 + Math.random() * 20);
-                    break;
-                case 'triangle':
-                    shape = new Polygon(pos, createPolygonVertices(3, 25 + Math.random() * 10));
-                    break;
-                case 'pentagon':
-                    shape = new Polygon(pos, createPolygonVertices(5, 25 + Math.random() * 10));
-                    break;
-            }
-
-            shape.invMass = 1;
-            shape.restitution = 0.6;
-            shape.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
-
-            return shape;
+    function createShape(type, x, y) {
+        const pos = new P.Vector2(x, y);
+        let s;
+        switch (type) {
+            case 'circle':   s = new P.Circle(pos, 18 + Math.random() * 18); break;
+            case 'rect':     s = new P.Rectangle(pos, 35 + Math.random() * 35, 28 + Math.random() * 22); break;
+            case 'triangle': s = new P.Polygon(pos, polyVerts(3, 24 + Math.random() * 10)); break;
+            case 'pentagon': s = new P.Polygon(pos, polyVerts(5, 22 + Math.random() * 10)); break;
+            case 'hexagon':  s = new P.Polygon(pos, polyVerts(6, 22 + Math.random() * 10)); break;
         }
+        s.invMass = 1;
+        s.restitution = 0.55;
+        s.color = `hsl(${Math.random() * 360}, 65%, 60%)`;
+        s.velocity = new P.Vector2((Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160);
+        return s;
+    }
 
-        function drawGrid() {
-            if (!showGrid) return;
-
-            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
-            ctx.lineWidth = 1;
-
-            for (let x = 0; x <= 800; x += 80) {
-                ctx.beginPath();
-                ctx.moveTo(x, 0);
-                ctx.lineTo(x, 600);
-                ctx.stroke();
-            }
-
-            for (let y = 0; y <= 600; y += 80) {
-                ctx.beginPath();
-                ctx.moveTo(0, y);
-                ctx.lineTo(800, y);
-                ctx.stroke();
-            }
-        }
-
-        function drawShape(shape, isColliding = false) {
-            ctx.save();
-
-            if (isColliding) {
-                ctx.strokeStyle = '#ff6b6b';
-                ctx.lineWidth = 3;
+    function getShapeAt(x, y) {
+        for (let i = world.shapes.length - 1; i >= 0; i--) {
+            const s = world.shapes[i];
+            if (s.getType() === 'Circle') {
+                const dx = x - s.position.x, dy = y - s.position.y;
+                if (dx * dx + dy * dy <= s.radius * s.radius) return s;
             } else {
-                ctx.strokeStyle = shape.color || '#00d4ff';
-                ctx.lineWidth = 2;
-            }
-
-            ctx.fillStyle = shape.color ? shape.color + '40' : 'rgba(0, 212, 255, 0.3)';
-
-            if (shape.getType() === 'Circle') {
-                ctx.beginPath();
-                ctx.arc(shape.position.x, shape.position.y, shape.radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            } else {
-                const vertices = shape.getWorldVertices();
-                ctx.beginPath();
-                ctx.moveTo(vertices[0].x, vertices[0].y);
-                for (let i = 1; i < vertices.length; i++) {
-                    ctx.lineTo(vertices[i].x, vertices[i].y);
-                }
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-            }
-
-            if (isColliding && shape.collisionNormal) {
-                ctx.strokeStyle = '#4ade80';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.moveTo(shape.position.x, shape.position.y);
-                ctx.lineTo(
-                    shape.position.x + shape.collisionNormal.x * 30,
-                    shape.position.y + shape.collisionNormal.y * 30
-                );
-                ctx.stroke();
-
-                ctx.fillStyle = '#4ade80';
-                ctx.beginPath();
-                ctx.arc(shape.position.x, shape.position.y, 4, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            ctx.restore();
-        }
-
-        function draw() {
-            ctx.clearRect(0, 0, 800, 600);
-
-            drawGrid();
-
-            const collidingPairs = new Set();
-            const collisions = [];
-
-            const pairs = world.spatialGrid.getPotentialCollisions();
-            for (const pair of pairs) {
-                const collision = detectCollision(pair.shapeA, pair.shapeB);
-                if (collision.collision) {
-                    collisions.push(collision);
-                    collidingPairs.add(pair.shapeA.id);
-                    collidingPairs.add(pair.shapeB.id);
-
-                    pair.shapeA.collisionNormal = collision.normal.mul(-1);
-                    pair.shapeB.collisionNormal = collision.normal;
-                }
-            }
-
-            for (const shape of world.shapes) {
-                drawShape(shape, collidingPairs.has(shape.id));
-                delete shape.collisionNormal;
-            }
-
-            const stats = world.getStats();
-            document.getElementById('stat-shapes').textContent = stats.totalShapes;
-            document.getElementById('stat-broad').textContent = stats.broadPhasePairs;
-            document.getElementById('stat-narrow').textContent = stats.narrowPhaseTests;
-            document.getElementById('stat-collisions').textContent = stats.collisions;
-
-            const collisionInfo = document.getElementById('collision-info');
-            if (stats.collisions > 0) {
-                collisionInfo.classList.add('active');
-                collisionInfo.innerHTML = `<strong style="color: #ff6b6b;">检测到 ${stats.collisions} 个碰撞</strong><br>空间网格减少了 ${((1 - stats.narrowPhaseTests / Math.max(stats.totalShapes * (stats.totalShapes - 1) / 2, 1)) * 100).toFixed(1)}% 的检测量`;
-            } else {
-                collisionInfo.classList.remove('active');
+                const aabb = s.getAABB();
+                if (x >= aabb.minX && x <= aabb.maxX && y >= aabb.minY && y <= aabb.maxY) return s;
             }
         }
+        return null;
+    }
 
-        function update() {
-            if (gravityEnabled) {
-                world.setGravity(0, 500);
-            } else {
-                world.setGravity(0, 0);
+    function toggleSelect(shape) {
+        const idx = selectedShapes.indexOf(shape);
+        if (idx >= 0) {
+            selectedShapes.splice(idx, 1);
+        } else {
+            if (selectedShapes.length >= MAX_SELECT) {
+                selectedShapes.shift();
+            }
+            selectedShapes.push(shape);
+        }
+        updateSatDebug();
+    }
+
+    // ========= SAT 调试面板 =========
+    function updateSatDebug() {
+        const container = document.getElementById('sat-axes-container');
+        const infoEl = document.getElementById('s-selected-info');
+        const indicator = document.getElementById('s-mode-indicator');
+
+        if (selectedShapes.length < 2) {
+            infoEl.style.display = 'none';
+            indicator.style.display = 'none';
+            container.innerHTML = `<div class="hint" style="text-align:center; color:#555577; padding:20px 0;">
+                请先选择两个物体查看 SAT 计算过程<br>
+                （已选 ${selectedShapes.length}/2）
+            </div>`;
+            return;
+        }
+
+        indicator.style.display = 'inline-block';
+        const [a, b] = selectedShapes;
+
+        infoEl.style.display = 'block';
+        infoEl.innerHTML = `<strong>物体 A:</strong> ${a.getType()} #${a.id} &nbsp; <strong>物体 B:</strong> ${b.getType()} #${b.id}`;
+
+        const debug = P.detectCollisionDebug(a, b);
+        lastCollisionDebug = debug;
+
+        let html = '';
+        debug.axes.forEach((ax, idx) => {
+            const isMin = idx === debug.minAxisIndex && debug.collision;
+            const cls = `axis-row ${isMin ? 'selected' : ''} ${ax.separated ? 'separated' : ''}`;
+            const overlapClass = isMin ? 'axis-overlap min' : 'axis-overlap';
+            const status = ax.separated ? '<span style="color:#f87171;">分离</span>'
+                           : (isMin ? '<span style="color:#4ade80;">最小</span>' : '<span style="color:#fbbf24;">重叠</span>');
+
+            // 生成投影条可视化
+            let projHtml = '';
+            if (ax.projA && ax.projB) {
+                const pmin = Math.min(ax.projA.min, ax.projB.min);
+                const pmax = Math.max(ax.projA.max, ax.projB.max);
+                const range = Math.max(pmax - pmin, 0.01);
+                const aStart = (ax.projA.min - pmin) / range * 100;
+                const aWidth = (ax.projA.max - ax.projA.min) / range * 100;
+                const bStart = (ax.projB.min - pmin) / range * 100;
+                const bWidth = (ax.projB.max - ax.projB.min) / range * 100;
+                projHtml = `<div class="proj-bar">
+                    <div class="proj-a" style="margin-left:${aStart}%; width:${aWidth}%;" title="A"></div>
+                    <div class="proj-b" style="margin-left:${Math.max(0, bStart - aStart - aWidth)}%; width:${bWidth}%;" title="B"></div>
+                </div>`;
             }
 
-            if (!dragging) {
-                world.step(1 / 60);
+            html += `<div class="${cls}">
+                <div class="axis-idx">${idx}</div>
+                <div>
+                    <div class="axis-vec">(${ax.axis.x.toFixed(3)}, ${ax.axis.y.toFixed(3)})</div>
+                    ${projHtml}
+                </div>
+                <div class="${overlapClass}">${ax.overlap.toFixed(3)}</div>
+                <div class="axis-status">${status}</div>
+                ${ax.projA ? `<div class="axis-detail">A:[${ax.projA.min.toFixed(2)}, ${ax.projA.max.toFixed(2)}] &nbsp; B:[${ax.projB.min.toFixed(2)}, ${ax.projB.max.toFixed(2)}]</div>` : ''}
+            </div>`;
+        });
+
+        html += `<div style="margin-top:10px; padding:8px; background:rgba(0,0,0,0.3); border-radius:4px; font-size:11px;">
+            <strong>结果：</strong>
+            <span style="color:${debug.collision ? '#4ade80' : '#f87171'}; font-weight:bold;">
+                ${debug.collision ? '✓ 两物体相交' : '✗ 两物体分离'}
+            </span>
+            ${debug.collision ? `
+                <br><strong>最小穿透轴 (${debug.minAxisIndex}):</strong> (${debug.normal.x.toFixed(4)}, ${debug.normal.y.toFixed(4)})
+                <br><strong>穿透深度：</strong> <span style="color:#4ade80; font-weight:bold;">${debug.depth.toFixed(4)}</span>
+            ` : ''}
+        </div>`;
+
+        container.innerHTML = html;
+
+        // 更新最近碰撞详情
+        const lc = document.getElementById('s-last-collision');
+        if (debug.collision) {
+            lc.innerHTML = `<strong style="color:#f87171;">检测到碰撞！</strong><br>
+                法线: (${debug.normal.x.toFixed(4)}, ${debug.normal.y.toFixed(4)})<br>
+                穿透深度: <span style="color:#4ade80; font-weight:bold;">${debug.depth.toFixed(4)}</span><br>
+                候选轴数: ${debug.axes.length}, 最小轴索引: ${debug.minAxisIndex}`;
+        } else {
+            lc.innerHTML = `<span style="color:#888;">两物体未碰撞</span><br>候选轴数: ${debug.axes.length}`;
+        }
+    }
+
+    // ========= 绘制 =========
+    function drawGrid() {
+        if (!showGrid) return;
+        ctx.strokeStyle = 'rgba(0, 229, 255, 0.08)';
+        ctx.lineWidth = 1;
+        const cs = 90;
+        for (let x = 0; x <= W; x += cs) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+        for (let y = 0; y <= H; y += cs) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+    }
+
+    function drawAABB(s) {
+        if (!showAABB) return;
+        const a = s.getAABB();
+        ctx.strokeStyle = 'rgba(255, 200, 0, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.strokeRect(a.minX, a.minY, a.maxX - a.minX, a.maxY - a.minY);
+        ctx.setLineDash([]);
+    }
+
+    function drawShape(s, isColliding, normal) {
+        ctx.save();
+
+        // 选中高亮
+        const isSelected = selectedShapes.includes(s);
+        let strokeColor = s.color || '#00e5ff';
+        let lineW = 2;
+
+        if (isColliding) { strokeColor = '#ff4081'; lineW = 3; }
+        if (isSelected) { strokeColor = '#fbbf24'; lineW = 3; }
+
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = lineW;
+        ctx.fillStyle = s.color ? s.color + '35' : 'rgba(0, 229, 255, 0.25)';
+
+        if (s.getType() === 'Circle') {
+            ctx.beginPath();
+            ctx.arc(s.position.x, s.position.y, s.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        } else {
+            const verts = s.getWorldVertices();
+            ctx.beginPath();
+            ctx.moveTo(verts[0].x, verts[0].y);
+            for (let i = 1; i < verts.length; i++) ctx.lineTo(verts[i].x, verts[i].y);
+            ctx.closePath();
+            ctx.fill();
+            ctx.stroke();
+        }
+
+        drawAABB(s);
+
+        // 碰撞法线
+        if (isColliding && normal && showNormals) {
+            ctx.strokeStyle = '#4ade80';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(s.position.x, s.position.y);
+            ctx.lineTo(s.position.x + normal.x * 35, s.position.y + normal.y * 35);
+            ctx.stroke();
+            // 箭头
+            const ang = Math.atan2(normal.y, normal.x);
+            ctx.beginPath();
+            ctx.moveTo(s.position.x + normal.x * 35, s.position.y + normal.y * 35);
+            ctx.lineTo(s.position.x + normal.x * 35 - 8 * Math.cos(ang - 0.4),
+                       s.position.y + normal.y * 35 - 8 * Math.sin(ang - 0.4));
+            ctx.moveTo(s.position.x + normal.x * 35, s.position.y + normal.y * 35);
+            ctx.lineTo(s.position.x + normal.x * 35 - 8 * Math.cos(ang + 0.4),
+                       s.position.y + normal.y * 35 - 8 * Math.sin(ang + 0.4));
+            ctx.stroke();
+
+            ctx.fillStyle = '#4ade80';
+            ctx.beginPath();
+            ctx.arc(s.position.x, s.position.y, 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // 显示穿透深度
+            ctx.fillStyle = '#4ade80';
+            ctx.font = 'bold 11px sans-serif';
+            ctx.fillText(`depth: ${s._lastDepth ? s._lastDepth.toFixed(2) : ''}`,
+                         s.position.x + 10, s.position.y - 10);
+        }
+
+        // ID 标签
+        ctx.fillStyle = 'rgba(255,255,255,0.6)';
+        ctx.font = '10px sans-serif';
+        ctx.fillText(`#${s.id} ${s.getType()[0]}`, s.position.x + 4, s.position.y + 4);
+
+        ctx.restore();
+    }
+
+    function drawSATDebugLines() {
+        if (selectedShapes.length < 2) return;
+        const [a, b] = selectedShapes;
+        const debug = P.detectCollisionDebug(a, b);
+        if (!debug.collision) return;
+
+        // 画最小穿透轴
+        ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+
+        const mid = a.position.add(b.position).mul(0.5);
+        const n = debug.normal;
+        const scale = 120;
+        ctx.beginPath();
+        ctx.moveTo(mid.x - n.x * scale, mid.y - n.y * scale);
+        ctx.lineTo(mid.x + n.x * scale, mid.y + n.y * scale);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.fillStyle = '#fbbf24';
+        ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`最小穿透轴 (depth=${debug.depth.toFixed(2)})`,
+                     mid.x + n.x * scale + 5, mid.y + n.y * scale);
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, W, H);
+        drawGrid();
+
+        // 收集碰撞信息
+        const colliding = new Map();
+        const pairs = world.spatialGrid.getPotentialCollisions();
+        for (const pair of pairs) {
+            const col = P.detectCollision(pair.shapeA, pair.shapeB);
+            if (col.collision) {
+                colliding.set(pair.shapeA.id, { normal: col.normal.mul(-1), depth: col.depth });
+                colliding.set(pair.shapeB.id, { normal: col.normal, depth: col.depth });
+                pair.shapeA._lastDepth = col.depth;
+                pair.shapeB._lastDepth = col.depth;
             }
         }
 
-        function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
+        for (const s of world.shapes) {
+            const info = colliding.get(s.id);
+            drawShape(s, !!info, info ? info.normal : null);
         }
 
-        function getMousePos(e) {
-            const rect = canvas.getBoundingClientRect();
-            return {
-                x: e.clientX - rect.left,
-                y: e.clientY - rect.top
-            };
+        drawSATDebugLines();
+
+        // 更新统计
+        const stats = world.getStats();
+        document.getElementById('s-shapes').textContent = stats.totalShapes;
+        document.getElementById('s-collisions').textContent = stats.collisions;
+        document.getElementById('s-broad').textContent = stats.broadPhasePairs;
+        document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
+
+        document.getElementById('s-grid-time').textContent = (stats.broadPhaseTime + stats.narrowPhaseTime).toFixed(2) + 'ms';
+        document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
+        document.getElementById('s-brute-time').textContent = stats.bruteForceTime.toFixed(2) + 'ms';
+        document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
+
+        const speedup = stats.bruteForceTime > 0 ? (stats.bruteForceTime / Math.max(stats.broadPhaseTime + stats.narrowPhaseTime, 0.01)) : 1;
+        document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
+        const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
+        document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+    }
+
+    function update() {
+        if (paused && !stepOnce) return;
+        stepOnce = false;
+
+        if (gravityEnabled) world.setGravity(0, 600);
+        else world.setGravity(0, 0);
+
+        if (!dragging) {
+            world.step(1 / 60);
+        } else {
+            world.spatialGrid.clear();
+            for (const s of world.shapes) world.spatialGrid.insert(s);
+        }
+    }
+
+    function loop() {
+        update();
+        draw();
+        requestAnimationFrame(loop);
+    }
+
+    // ========= 鼠标事件 =========
+    function getMouse(e) {
+        const r = canvas.getBoundingClientRect();
+        return { x: e.clientX - r.left, y: e.clientY - r.top };
+    }
+
+    let mouseDownTime = 0;
+    let mouseDownPos = null;
+
+    canvas.addEventListener('mousedown', (e) => {
+        const pos = getMouse(e);
+        mouseDownTime = Date.now();
+        mouseDownPos = pos;
+        const s = getShapeAt(pos.x, pos.y);
+        if (s) {
+            dragging = s;
+            dragOffset.x = pos.x - s.position.x;
+            dragOffset.y = pos.y - s.position.y;
+            s.velocity = new P.Vector2(0, 0);
+        }
+    });
+
+    canvas.addEventListener('mousemove', (e) => {
+        if (dragging) {
+            const pos = getMouse(e);
+            dragging.position.x = pos.x - dragOffset.x;
+            dragging.position.y = pos.y - dragOffset.y;
+            if (selectedShapes.length === 2) updateSatDebug();
+        }
+    });
+
+    canvas.addEventListener('mouseup', (e) => {
+        const pos = getMouse(e);
+        const dt = Date.now() - mouseDownTime;
+        const moved = mouseDownPos ? Math.hypot(pos.x - mouseDownPos.x, pos.y - mouseDownPos.y) : 0;
+
+        // 短时间点击且未移动 => 选中
+        if (dragging && dt < 250 && moved < 5) {
+            toggleSelect(dragging);
+        } else if (!dragging && dt < 250) {
+            // 点击空白处 => 创建物体
+            const ns = createShape(currentShape, pos.x, pos.y);
+            world.addShape(ns);
         }
 
-        function getShapeAt(x, y) {
-            for (let i = world.shapes.length - 1; i >= 0; i--) {
-                const shape = world.shapes[i];
-                if (shape.getType() === 'Circle') {
-                    const dist = Math.sqrt((x - shape.position.x) ** 2 + (y - shape.position.y) ** 2);
-                    if (dist <= shape.radius) return shape;
-                } else {
-                    const aabb = shape.getAABB();
-                    if (x >= aabb.minX && x <= aabb.maxX && y >= aabb.minY && y <= aabb.maxY) {
-                        return shape;
-                    }
-                }
-            }
-            return null;
+        dragging = null;
+    });
+
+    canvas.addEventListener('mouseleave', () => { dragging = null; });
+
+    // ========= UI 按钮 =========
+    const typeButtons = ['btn-circle', 'btn-rect', 'btn-triangle', 'btn-pentagon', 'btn-hexagon'];
+    const typeMap = { 'btn-circle': 'circle', 'btn-rect': 'rect', 'btn-triangle': 'triangle',
+                      'btn-pentagon': 'pentagon', 'btn-hexagon': 'hexagon' };
+
+    typeButtons.forEach(id => {
+        document.getElementById(id).addEventListener('click', () => {
+            currentShape = typeMap[id];
+            typeButtons.forEach(b => document.getElementById(b).classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        });
+    });
+
+    document.getElementById('btn-spawn').addEventListener('click', () => {
+        for (let i = 0; i < 10; i++) {
+            const types = Object.values(typeMap);
+            const s = createShape(types[Math.floor(Math.random() * types.length)],
+                                  80 + Math.random() * (W - 160),
+                                  80 + Math.random() * (H - 160));
+            world.addShape(s);
         }
+    });
 
-        canvas.addEventListener('mousedown', (e) => {
-            const pos = getMousePos(e);
-            const shape = getShapeAt(pos.x, pos.y);
-
-            if (shape) {
-                dragging = shape;
-                dragOffset.x = pos.x - shape.position.x;
-                dragOffset.y = pos.y - shape.position.y;
-                shape.velocity = new Vector2(0, 0);
-            } else {
-                const newShape = createShape(currentShape, pos.x, pos.y);
-                world.addShape(newShape);
-            }
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (dragging) {
-                const pos = getMousePos(e);
-                dragging.position.x = pos.x - dragOffset.x;
-                dragging.position.y = pos.y - dragOffset.y;
-            }
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            dragging = null;
-        });
-
-        canvas.addEventListener('mouseleave', () => {
-            dragging = null;
-        });
-
-        document.getElementById('btn-circle').addEventListener('click', () => {
-            currentShape = 'circle';
-            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-circle').classList.add('active');
-        });
-
-        document.getElementById('btn-rect').addEventListener('click', () => {
-            currentShape = 'rect';
-            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-rect').classList.add('active');
-        });
-
-        document.getElementById('btn-triangle').addEventListener('click', () => {
-            currentShape = 'triangle';
-            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-triangle').classList.add('active');
-        });
-
-        document.getElementById('btn-pentagon').addEventListener('click', () => {
-            currentShape = 'pentagon';
-            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
-            document.getElementById('btn-pentagon').classList.add('active');
-        });
-
-        document.getElementById('btn-clear').addEventListener('click', () => {
-            world.clear();
-        });
-
-        document.getElementById('btn-spawn').addEventListener('click', () => {
-            for (let i = 0; i < 10; i++) {
-                const types = ['circle', 'rect', 'triangle', 'pentagon'];
-                const type = types[Math.floor(Math.random() * types.length)];
-                const x = 50 + Math.random() * 700;
-                const y = 50 + Math.random() * 500;
-                const shape = createShape(type, x, y);
-                shape.velocity = new Vector2(
-                    (Math.random() - 0.5) * 200,
-                    (Math.random() - 0.5) * 200
-                );
-                world.addShape(shape);
-            }
-        });
-
-        document.getElementById('btn-gravity').addEventListener('click', (e) => {
-            gravityEnabled = !gravityEnabled;
-            e.target.textContent = gravityEnabled ? '关闭重力' : '开启重力';
-            e.target.classList.toggle('active');
-        });
-
-        document.getElementById('show-grid').addEventListener('change', (e) => {
-            showGrid = e.target.checked;
-        });
-
-        for (let i = 0; i < 8; i++) {
-            const types = ['circle', 'rect', 'triangle', 'pentagon'];
-            const type = types[Math.floor(Math.random() * types.length)];
-            const x = 100 + Math.random() * 600;
-            const y = 100 + Math.random() * 400;
-            const shape = createShape(type, x, y);
-            shape.velocity = new Vector2(
-                (Math.random() - 0.5) * 150,
-                (Math.random() - 0.5) * 150
-            );
-            world.addShape(shape);
+    document.getElementById('btn-spawn-many').addEventListener('click', () => {
+        for (let i = 0; i < 50; i++) {
+            const types = Object.values(typeMap);
+            const s = createShape(types[Math.floor(Math.random() * types.length)],
+                                  50 + Math.random() * (W - 100),
+                                  50 + Math.random() * (H - 100));
+            world.addShape(s);
         }
+    });
 
-        gameLoop();
+    document.getElementById('btn-clear').addEventListener('click', () => {
+        world.clear();
+        selectedShapes.length = 0;
+        updateSatDebug();
+    });
+
+    // 修正模式
+    document.getElementById('btn-mode-full').addEventListener('click', () => {
+        world.setCorrectionMode(P.CORRECTION_MODE.FULL_SEPARATION);
+        document.getElementById('btn-mode-full').classList.add('active');
+        document.getElementById('btn-mode-stable').classList.remove('active');
+    });
+    document.getElementById('btn-mode-stable').addEventListener('click', () => {
+        world.setCorrectionMode(P.CORRECTION_MODE.STABLE_WITH_TOLERANCE);
+        document.getElementById('btn-mode-stable').classList.add('active');
+        document.getElementById('btn-mode-full').classList.remove('active');
+    });
+
+    // 宽阶段
+    document.getElementById('btn-broad-on').addEventListener('click', () => {
+        world.enableBroadPhase = true;
+        document.getElementById('btn-broad-on').classList.add('active');
+        document.getElementById('btn-broad-off').classList.remove('active');
+    });
+    document.getElementById('btn-broad-off').addEventListener('click', () => {
+        world.enableBroadPhase = false;
+        document.getElementById('btn-broad-off').classList.add('active');
+        document.getElementById('btn-broad-on').classList.remove('active');
+    });
+
+    // 重力/暂停/单步
+    document.getElementById('btn-gravity').addEventListener('click', (e) => {
+        gravityEnabled = !gravityEnabled;
+        e.target.classList.toggle('active');
+    });
+    document.getElementById('btn-pause').addEventListener('click', (e) => {
+        paused = !paused;
+        e.target.classList.toggle('active');
+        e.target.textContent = paused ? '▶️ 继续' : '⏸️ 暂停';
+    });
+    document.getElementById('btn-step').addEventListener('click', () => { stepOnce = true; });
+
+    // 显示开关
+    document.getElementById('btn-grid').addEventListener('click', (e) => {
+        showGrid = !showGrid;
+        e.target.classList.toggle('active');
+    });
+    document.getElementById('btn-normals').addEventListener('click', (e) => {
+        showNormals = !showNormals;
+        e.target.classList.toggle('active');
+    });
+    document.getElementById('btn-aabb').addEventListener('click', (e) => {
+        showAABB = !showAABB;
+        e.target.classList.toggle('active');
+    });
+
+    // 初始化一些物体
+    for (let i = 0; i < 12; i++) {
+        const types = Object.values(typeMap);
+        const s = createShape(types[Math.floor(Math.random() * types.length)],
+                              100 + Math.random() * (W - 200),
+                              100 + Math.random() * (H - 200));
+        world.addShape(s);
+    }
+
+    loop();
     </script>
 </body>
 </html>

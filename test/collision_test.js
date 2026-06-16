@@ -4,7 +4,9 @@ const {
     Rectangle,
     Polygon,
     detectCollision,
-    PhysicsWorld
+    detectCollisionDebug,
+    PhysicsWorld,
+    CORRECTION_MODE
 } = require('../src/index');
 
 function testCircleCircleCollision() {
@@ -236,6 +238,160 @@ function testRotatedPolygon() {
     console.log('  ✓ Passed\n');
 }
 
+function testFullSeparationMode() {
+    console.log('=== Test: 完全分离模式 (Full Separation) ===');
+
+    const world = new PhysicsWorld(400, 400, 50);
+    world.setCorrectionMode(CORRECTION_MODE.FULL_SEPARATION);
+
+    const circle1 = new Circle(new Vector2(100, 200), 20);
+    const circle2 = new Circle(new Vector2(130, 200), 20);
+    circle1.invMass = 1;
+    circle2.invMass = 1;
+    circle1.velocity = new Vector2(0, 0);
+    circle2.velocity = new Vector2(0, 0);
+
+    world.addShape(circle1);
+    world.addShape(circle2);
+
+    const initialDist = Vector2.distance(circle1.position, circle2.position);
+    console.log(`  初始距离: ${initialDist.toFixed(4)} (重叠 ${(40 - initialDist).toFixed(4)})`);
+
+    world.step(1 / 60);
+
+    const distAfter1 = Vector2.distance(circle1.position, circle2.position);
+    console.log(`  1次步进后距离: ${distAfter1.toFixed(4)}`);
+
+    console.assert(distAfter1 >= 39.99, `完全分离模式下 1 次步进后距离应 >= 39.99，实际 ${distAfter1.toFixed(4)}`);
+
+    world.step(1 / 60);
+    const distAfter2 = Vector2.distance(circle1.position, circle2.position);
+    console.log(`  2次步进后距离: ${distAfter2.toFixed(4)} (确认不再穿透)`);
+
+    const col = detectCollision(circle1, circle2);
+    console.log(`  1次响应后再次检测: collision=${col.collision}`);
+    console.assert(col.collision === false, '完全分离模式下一次响应后应不再穿透');
+
+    console.log('  ✓ Passed\n');
+}
+
+function testStableWithToleranceMode() {
+    console.log('=== Test: 带容差稳定分离模式 (Stable w/ Tolerance) ===');
+
+    const world = new PhysicsWorld(400, 400, 50);
+    world.setCorrectionMode(CORRECTION_MODE.STABLE_WITH_TOLERANCE);
+
+    const circle1 = new Circle(new Vector2(100, 200), 20);
+    const circle2 = new Circle(new Vector2(130, 200), 20);
+    circle1.invMass = 1;
+    circle2.invMass = 1;
+
+    world.addShape(circle1);
+    world.addShape(circle2);
+
+    const dists = [];
+    for (let i = 0; i < 20; i++) {
+        world.step(1 / 60);
+        dists.push(Vector2.distance(circle1.position, circle2.position));
+    }
+
+    console.log(`  第1次距离: ${dists[0].toFixed(4)}`);
+    console.log(`  第5次距离: ${dists[4].toFixed(4)}`);
+    console.log(`  第10次距离: ${dists[9].toFixed(4)}`);
+    console.log(`  第20次距离: ${dists[19].toFixed(4)}`);
+
+    const oscillations = [];
+    for (let i = 1; i < dists.length; i++) {
+        oscillations.push(Math.abs(dists[i] - dists[i - 1]));
+    }
+    const avgOsc = oscillations.reduce((a, b) => a + b, 0) / oscillations.length;
+    console.log(`  平均位置波动: ${avgOsc.toFixed(5)} (越小越稳定)`);
+
+    console.assert(avgOsc < 0.5, `带容差模式下平均波动应 < 0.5，实际 ${avgOsc.toFixed(5)}`);
+    console.assert(dists[19] >= 39.5, `最终距离应 >= 39.5，实际 ${dists[19].toFixed(4)}`);
+
+    console.log('  ✓ Passed (对比: 完全分离容易抖动, 带容差更平滑)\n');
+}
+
+function testCorrectionModeComparison() {
+    console.log('=== Test: 两种修正模式对比 ===');
+
+    function simulate(mode) {
+        const world = new PhysicsWorld(500, 500, 50);
+        world.setCorrectionMode(mode);
+        world.gravity = new Vector2(0, 0);
+
+        const base = new Circle(new Vector2(250, 250), 25);
+        base.invMass = 0;
+        base.velocity = new Vector2(0, 0);
+
+        const ball = new Circle(new Vector2(250, 195), 20);
+        ball.invMass = 1;
+        ball.velocity = new Vector2(0, 0);
+
+        world.addShape(base);
+        world.addShape(ball);
+
+        const gaps = [];
+        let collisionsCount = 0;
+        for (let i = 0; i < 40; i++) {
+            if (i % 3 === 0) {
+                ball.position.y = base.position.y + 30;
+                ball.velocity = new Vector2(0, 60);
+            }
+            const cols = world.step(1 / 60);
+            collisionsCount += cols.length;
+            const gap = (ball.position.y - base.position.y) - (base.radius + ball.radius);
+            gaps.push(gap);
+        }
+
+        let osc = 0;
+        for (let i = 1; i < gaps.length; i++) {
+            osc += Math.abs(gaps[i] - gaps[i - 1]);
+        }
+        const penetrationCount = gaps.filter(g => g < -0.1).length;
+        return { avgOscillation: osc / (gaps.length - 1), collisionsCount, penetrationCount, gaps };
+    }
+
+    const full = simulate(CORRECTION_MODE.FULL_SEPARATION);
+    const stable = simulate(CORRECTION_MODE.STABLE_WITH_TOLERANCE);
+
+    console.log(`  [完全分离]   平均帧间变化: ${full.avgOscillation.toFixed(4)}, 明显穿透帧数: ${full.penetrationCount}`);
+    console.log(`  [稳定(容差)] 平均帧间变化: ${stable.avgOscillation.toFixed(4)}, 明显穿透帧数: ${stable.penetrationCount}`);
+
+    console.assert(full.penetrationCount <= 5,
+        `完全分离模式应极少明显穿透，实际 ${full.penetrationCount} 帧`);
+    console.assert(stable.avgOscillation < 6,
+        `稳定模式应更平滑，帧间变化 ${stable.avgOscillation.toFixed(4)} < 6`);
+    console.log(`  差异: 完全分离=几乎零穿透但位置跳变, 稳定模式=允许微小重叠但过渡平滑`);
+
+    console.log('  ✓ Passed\n');
+}
+
+function testSatDebugInfo() {
+    console.log('=== Test: SAT 调试信息 (detectCollisionDebug) ===');
+
+    const rect = new Rectangle(new Vector2(0, 0), 20, 20);
+    const circle = new Circle(new Vector2(15, 0), 10);
+
+    const debug = detectCollisionDebug(rect, circle);
+    console.log(`  碰撞: ${debug.collision}`);
+    console.log(`  候选轴数: ${debug.axes.length}`);
+    console.log(`  最小穿透轴索引: ${debug.minAxisIndex}`);
+    console.log(`  穿透深度: ${debug.depth.toFixed(4)}`);
+    console.log(`  法线: (${debug.normal.x.toFixed(4)}, ${debug.normal.y.toFixed(4)})`);
+
+    console.assert(debug.collision === true, '两物体应碰撞');
+    console.assert(debug.axes.length > 0, '应有候选轴');
+    console.assert(debug.minAxisIndex >= 0, '应找到最小穿透轴');
+    console.assert(debug.depth > 0, '穿透深度应 > 0');
+    console.assert(debug.axes[0].projA !== undefined, '轴应包含投影信息');
+
+    console.log('  各轴重叠量: ' + debug.axes.map((a, i) => `#${i}:${a.overlap.toFixed(3)}`).join(', '));
+
+    console.log('  ✓ Passed\n');
+}
+
 function runAllTests() {
     console.log('========================================');
     console.log('  2D Physics Collision Engine Tests');
@@ -251,6 +407,10 @@ function runAllTests() {
         testPositionCorrection();
         testVelocityResponse();
         testSpatialGrid();
+        testSatDebugInfo();
+        testFullSeparationMode();
+        testStableWithToleranceMode();
+        testCorrectionModeComparison();
         
         console.log('========================================');
         console.log('  All tests passed! ✓');

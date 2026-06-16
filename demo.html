@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>2D 物理碰撞检测引擎演示</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+            color: #fff;
+        }
+
+        h1 {
+            margin-bottom: 10px;
+            color: #00d4ff;
+            text-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+        }
+
+        .subtitle {
+            color: #8892b0;
+            margin-bottom: 20px;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .canvas-container {
+            position: relative;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas {
+            display: block;
+            background: #0a0a1a;
+            cursor: crosshair;
+        }
+
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 280px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .panel h2 {
+            color: #00d4ff;
+            margin-bottom: 15px;
+            font-size: 18px;
+            border-bottom: 2px solid rgba(0, 212, 255, 0.3);
+            padding-bottom: 8px;
+        }
+
+        .control-group {
+            margin-bottom: 15px;
+        }
+
+        .control-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #8892b0;
+            font-size: 14px;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        button {
+            background: linear-gradient(135deg, #00d4ff 0%, #0099cc 100%);
+            color: #0a0a1a;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-size: 13px;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+
+        button.active {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%);
+            color: #fff;
+        }
+
+        button.secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        button.secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .stat-item {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 5px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #00d4ff;
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: #8892b0;
+            margin-top: 3px;
+        }
+
+        .instructions {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(0, 212, 255, 0.1);
+            border-radius: 8px;
+            border-left: 3px solid #00d4ff;
+        }
+
+        .instructions h3 {
+            color: #00d4ff;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+
+        .instructions ul {
+            list-style: none;
+            font-size: 12px;
+            color: #ccd6f6;
+        }
+
+        .instructions li {
+            margin-bottom: 5px;
+            padding-left: 15px;
+            position: relative;
+        }
+
+        .instructions li::before {
+            content: '→';
+            position: absolute;
+            left: 0;
+            color: #00d4ff;
+        }
+
+        .show-grid {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .show-grid input {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .collision-info {
+            margin-top: 15px;
+            padding: 10px;
+            background: rgba(255, 107, 107, 0.2);
+            border-radius: 5px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .collision-info.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <h1>2D 物理碰撞检测引擎</h1>
+    <p class="subtitle">基于分离轴定理 (SAT) + 空间网格宽阶段剔除</p>
+
+    <div class="container">
+        <div class="canvas-container">
+            <canvas id="canvas" width="800" height="600"></canvas>
+        </div>
+
+        <div class="panel">
+            <h2>控制面板</h2>
+
+            <div class="control-group">
+                <label>创建物体类型：</label>
+                <div class="btn-group">
+                    <button id="btn-circle" class="active">圆形</button>
+                    <button id="btn-rect">矩形</button>
+                    <button id="btn-triangle">三角形</button>
+                    <button id="btn-pentagon">五边形</button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <label>操作：</label>
+                <div class="btn-group">
+                    <button id="btn-clear" class="secondary">清空</button>
+                    <button id="btn-spawn" class="secondary">随机生成</button>
+                    <button id="btn-gravity" class="secondary">开启重力</button>
+                </div>
+            </div>
+
+            <div class="show-grid">
+                <input type="checkbox" id="show-grid" checked>
+                <label for="show-grid" style="margin: 0; cursor: pointer;">显示空间网格</label>
+            </div>
+
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-shapes">0</div>
+                    <div class="stat-label">物体总数</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-broad">0</div>
+                    <div class="stat-label">宽阶段对</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-narrow">0</div>
+                    <div class="stat-label">窄阶段检测</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="stat-collisions">0</div>
+                    <div class="stat-label">碰撞数</div>
+                </div>
+            </div>
+
+            <div class="collision-info" id="collision-info">
+                <strong style="color: #ff6b6b;">碰撞检测中...</strong>
+            </div>
+
+            <div class="instructions">
+                <h3>使用说明</h3>
+                <ul>
+                    <li>点击画布创建选中类型的物体</li>
+                    <li>拖拽物体可以移动它</li>
+                    <li>红色边框表示正在碰撞</li>
+                    <li>绿色线条显示碰撞法线方向</li>
+                    <li>空间网格将碰撞检测从 O(n²) 降至近似 O(n)</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script src="./src/shapes.js"></script>
+    <script src="./src/sat.js"></script>
+    <script src="./src/spatial_grid.js"></script>
+    <script src="./src/physics_world.js"></script>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        let currentShape = 'circle';
+        let showGrid = true;
+        let gravityEnabled = false;
+        let dragging = null;
+        let dragOffset = { x: 0, y: 0 };
+
+        const world = new PhysicsWorld(800, 600, 80);
+
+        function createPolygonVertices(sides, radius) {
+            const vertices = [];
+            for (let i = 0; i < sides; i++) {
+                const angle = (i / sides) * Math.PI * 2 - Math.PI / 2;
+                vertices.push(new Vector2(
+                    Math.cos(angle) * radius,
+                    Math.sin(angle) * radius
+                ));
+            }
+            return vertices;
+        }
+
+        function createShape(type, x, y) {
+            const pos = new Vector2(x, y);
+            let shape;
+
+            switch (type) {
+                case 'circle':
+                    shape = new Circle(pos, 20 + Math.random() * 15);
+                    break;
+                case 'rect':
+                    shape = new Rectangle(pos, 40 + Math.random() * 30, 30 + Math.random() * 20);
+                    break;
+                case 'triangle':
+                    shape = new Polygon(pos, createPolygonVertices(3, 25 + Math.random() * 10));
+                    break;
+                case 'pentagon':
+                    shape = new Polygon(pos, createPolygonVertices(5, 25 + Math.random() * 10));
+                    break;
+            }
+
+            shape.invMass = 1;
+            shape.restitution = 0.6;
+            shape.color = `hsl(${Math.random() * 360}, 70%, 60%)`;
+
+            return shape;
+        }
+
+        function drawGrid() {
+            if (!showGrid) return;
+
+            ctx.strokeStyle = 'rgba(0, 212, 255, 0.1)';
+            ctx.lineWidth = 1;
+
+            for (let x = 0; x <= 800; x += 80) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, 600);
+                ctx.stroke();
+            }
+
+            for (let y = 0; y <= 600; y += 80) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(800, y);
+                ctx.stroke();
+            }
+        }
+
+        function drawShape(shape, isColliding = false) {
+            ctx.save();
+
+            if (isColliding) {
+                ctx.strokeStyle = '#ff6b6b';
+                ctx.lineWidth = 3;
+            } else {
+                ctx.strokeStyle = shape.color || '#00d4ff';
+                ctx.lineWidth = 2;
+            }
+
+            ctx.fillStyle = shape.color ? shape.color + '40' : 'rgba(0, 212, 255, 0.3)';
+
+            if (shape.getType() === 'Circle') {
+                ctx.beginPath();
+                ctx.arc(shape.position.x, shape.position.y, shape.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+            } else {
+                const vertices = shape.getWorldVertices();
+                ctx.beginPath();
+                ctx.moveTo(vertices[0].x, vertices[0].y);
+                for (let i = 1; i < vertices.length; i++) {
+                    ctx.lineTo(vertices[i].x, vertices[i].y);
+                }
+                ctx.closePath();
+                ctx.fill();
+                ctx.stroke();
+            }
+
+            if (isColliding && shape.collisionNormal) {
+                ctx.strokeStyle = '#4ade80';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(shape.position.x, shape.position.y);
+                ctx.lineTo(
+                    shape.position.x + shape.collisionNormal.x * 30,
+                    shape.position.y + shape.collisionNormal.y * 30
+                );
+                ctx.stroke();
+
+                ctx.fillStyle = '#4ade80';
+                ctx.beginPath();
+                ctx.arc(shape.position.x, shape.position.y, 4, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, 800, 600);
+
+            drawGrid();
+
+            const collidingPairs = new Set();
+            const collisions = [];
+
+            const pairs = world.spatialGrid.getPotentialCollisions();
+            for (const pair of pairs) {
+                const collision = detectCollision(pair.shapeA, pair.shapeB);
+                if (collision.collision) {
+                    collisions.push(collision);
+                    collidingPairs.add(pair.shapeA.id);
+                    collidingPairs.add(pair.shapeB.id);
+
+                    pair.shapeA.collisionNormal = collision.normal.mul(-1);
+                    pair.shapeB.collisionNormal = collision.normal;
+                }
+            }
+
+            for (const shape of world.shapes) {
+                drawShape(shape, collidingPairs.has(shape.id));
+                delete shape.collisionNormal;
+            }
+
+            const stats = world.getStats();
+            document.getElementById('stat-shapes').textContent = stats.totalShapes;
+            document.getElementById('stat-broad').textContent = stats.broadPhasePairs;
+            document.getElementById('stat-narrow').textContent = stats.narrowPhaseTests;
+            document.getElementById('stat-collisions').textContent = stats.collisions;
+
+            const collisionInfo = document.getElementById('collision-info');
+            if (stats.collisions > 0) {
+                collisionInfo.classList.add('active');
+                collisionInfo.innerHTML = `<strong style="color: #ff6b6b;">检测到 ${stats.collisions} 个碰撞</strong><br>空间网格减少了 ${((1 - stats.narrowPhaseTests / Math.max(stats.totalShapes * (stats.totalShapes - 1) / 2, 1)) * 100).toFixed(1)}% 的检测量`;
+            } else {
+                collisionInfo.classList.remove('active');
+            }
+        }
+
+        function update() {
+            if (gravityEnabled) {
+                world.setGravity(0, 500);
+            } else {
+                world.setGravity(0, 0);
+            }
+
+            if (!dragging) {
+                world.step(1 / 60);
+            }
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function getMousePos(e) {
+            const rect = canvas.getBoundingClientRect();
+            return {
+                x: e.clientX - rect.left,
+                y: e.clientY - rect.top
+            };
+        }
+
+        function getShapeAt(x, y) {
+            for (let i = world.shapes.length - 1; i >= 0; i--) {
+                const shape = world.shapes[i];
+                if (shape.getType() === 'Circle') {
+                    const dist = Math.sqrt((x - shape.position.x) ** 2 + (y - shape.position.y) ** 2);
+                    if (dist <= shape.radius) return shape;
+                } else {
+                    const aabb = shape.getAABB();
+                    if (x >= aabb.minX && x <= aabb.maxX && y >= aabb.minY && y <= aabb.maxY) {
+                        return shape;
+                    }
+                }
+            }
+            return null;
+        }
+
+        canvas.addEventListener('mousedown', (e) => {
+            const pos = getMousePos(e);
+            const shape = getShapeAt(pos.x, pos.y);
+
+            if (shape) {
+                dragging = shape;
+                dragOffset.x = pos.x - shape.position.x;
+                dragOffset.y = pos.y - shape.position.y;
+                shape.velocity = new Vector2(0, 0);
+            } else {
+                const newShape = createShape(currentShape, pos.x, pos.y);
+                world.addShape(newShape);
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (dragging) {
+                const pos = getMousePos(e);
+                dragging.position.x = pos.x - dragOffset.x;
+                dragging.position.y = pos.y - dragOffset.y;
+            }
+        });
+
+        canvas.addEventListener('mouseup', () => {
+            dragging = null;
+        });
+
+        canvas.addEventListener('mouseleave', () => {
+            dragging = null;
+        });
+
+        document.getElementById('btn-circle').addEventListener('click', () => {
+            currentShape = 'circle';
+            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-circle').classList.add('active');
+        });
+
+        document.getElementById('btn-rect').addEventListener('click', () => {
+            currentShape = 'rect';
+            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-rect').classList.add('active');
+        });
+
+        document.getElementById('btn-triangle').addEventListener('click', () => {
+            currentShape = 'triangle';
+            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-triangle').classList.add('active');
+        });
+
+        document.getElementById('btn-pentagon').addEventListener('click', () => {
+            currentShape = 'pentagon';
+            document.querySelectorAll('.btn-group button').forEach(b => b.classList.remove('active'));
+            document.getElementById('btn-pentagon').classList.add('active');
+        });
+
+        document.getElementById('btn-clear').addEventListener('click', () => {
+            world.clear();
+        });
+
+        document.getElementById('btn-spawn').addEventListener('click', () => {
+            for (let i = 0; i < 10; i++) {
+                const types = ['circle', 'rect', 'triangle', 'pentagon'];
+                const type = types[Math.floor(Math.random() * types.length)];
+                const x = 50 + Math.random() * 700;
+                const y = 50 + Math.random() * 500;
+                const shape = createShape(type, x, y);
+                shape.velocity = new Vector2(
+                    (Math.random() - 0.5) * 200,
+                    (Math.random() - 0.5) * 200
+                );
+                world.addShape(shape);
+            }
+        });
+
+        document.getElementById('btn-gravity').addEventListener('click', (e) => {
+            gravityEnabled = !gravityEnabled;
+            e.target.textContent = gravityEnabled ? '关闭重力' : '开启重力';
+            e.target.classList.toggle('active');
+        });
+
+        document.getElementById('show-grid').addEventListener('change', (e) => {
+            showGrid = e.target.checked;
+        });
+
+        for (let i = 0; i < 8; i++) {
+            const types = ['circle', 'rect', 'triangle', 'pentagon'];
+            const type = types[Math.floor(Math.random() * types.length)];
+            const x = 100 + Math.random() * 600;
+            const y = 100 + Math.random() * 400;
+            const shape = createShape(type, x, y);
+            shape.velocity = new Vector2(
+                (Math.random() - 0.5) * 150,
+                (Math.random() - 0.5) * 150
+            );
+            world.addShape(shape);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>

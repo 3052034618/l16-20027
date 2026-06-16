@@ -1,0 +1,20 @@
+{
+  "name": "2d-physics-collision-engine",
+  "version": "1.0.0",
+  "description": "A 2D physics collision detection engine using SAT (Separating Axis Theorem) with spatial grid broad phase",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node test/collision_test.js",
+    "debug": "node test/debug_test.js"
+  },
+  "keywords": [
+    "physics",
+    "collision-detection",
+    "sat",
+    "separating-axis-theorem",
+    "spatial-grid",
+    "2d"
+  ],
+  "author": "",
+  "license": "MIT"
+}

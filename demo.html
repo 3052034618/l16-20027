@@ -24,7 +24,7 @@
             flex-wrap: wrap;
             justify-content: center;
             width: 100%;
-            max-width: 1600px;
+            max-width: 1680px;
         }
         .canvas-wrap {
             position: relative;
@@ -41,7 +41,7 @@
             display: flex;
             flex-direction: column;
             gap: 12px;
-            width: 340px;
+            width: 360px;
             max-height: 720px;
             overflow-y: auto;
         }
@@ -59,13 +59,18 @@
             border-bottom: 1px solid rgba(0, 229, 255, 0.2);
             padding-bottom: 6px;
         }
+        .panel h4 {
+            color: #a0a0cc;
+            font-size: 12px;
+            margin: 8px 0 4px;
+        }
         .row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
         .row:last-child { margin-bottom: 0; }
         button {
             background: linear-gradient(135deg, #00b8d4 0%, #00838f 100%);
             color: #fff;
             border: none;
-            padding: 6px 12px;
+            padding: 6px 10px;
             border-radius: 5px;
             cursor: pointer;
             font-weight: 600;
@@ -76,6 +81,12 @@
         button.active { background: linear-gradient(135deg, #ff4081 0%, #c2185b 100%); color: #fff; }
         button.secondary { background: rgba(255,255,255,0.08); color: #e0e0ff; border: 1px solid rgba(255,255,255,0.15); }
         button.secondary:hover { background: rgba(255,255,255,0.15); }
+        button.rec { background: linear-gradient(135deg, #ef4444 0%, #b91c1c 100%); }
+        button.rec.active { animation: pulse 1s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
         label { font-size: 12px; color: #aaaacc; display: block; margin-bottom: 4px; }
         .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
         .stat { background: rgba(0,0,0,0.3); padding: 6px 8px; border-radius: 4px; text-align: center; }
@@ -112,7 +123,7 @@
             background: rgba(0,0,0,0.25);
         }
         .axis-row.selected { background: rgba(74, 222, 128, 0.2); border: 1px solid rgba(74, 222, 128, 0.5); }
-        .axis-row.separated { opacity: 0.5; }
+        .axis-row.separated { opacity: 0.6; }
         .axis-idx { font-weight: bold; color: #8888aa; text-align: center; }
         .axis-vec { font-family: 'Courier New', monospace; color: #aaaacc; font-size: 10px; }
         .axis-overlap { text-align: right; font-weight: bold; }
@@ -159,11 +170,57 @@
         .mode-indicator.stable { background: #4ade80; color: #0a0a1a; }
         .hint { font-size: 11px; color: #666688; line-height: 1.5; margin-top: 4px; }
         .section-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 10px 0; }
+
+        .playback-controls {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .playback-controls input[type=range] {
+            flex: 1;
+            accent-color: #00e5ff;
+        }
+        .playback-info {
+            font-size: 11px;
+            color: #8888aa;
+            text-align: center;
+            margin-top: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        .tag {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-right: 4px;
+        }
+        .tag.rec { background: #ef4444; color: white; }
+        .tag.play { background: #4ade80; color: #0a0a1a; }
+        .tag.pause { background: #fbbf24; color: #0a0a1a; }
+
+        .scenario-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px;
+            margin-top: 6px;
+        }
+        .scenario-btn {
+            padding: 8px 6px;
+            font-size: 11px;
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            text-align: left;
+        }
+        .scenario-btn:hover { background: rgba(255,255,255,0.12); }
+        .scenario-btn .sc-name { font-weight: bold; display: block; margin-bottom: 2px; }
+        .scenario-btn .sc-desc { font-size: 10px; color: #8888aa; }
     </style>
 </head>
 <body>
     <h1>2D 物理碰撞检测引擎</h1>
-    <p class="subtitle">分离轴定理 (SAT) · 空间网格宽阶段 · 两种碰撞修正模式</p>
+    <p class="subtitle">分离轴定理 (SAT) · 空间网格宽阶段 · 两种碰撞修正模式 · 录制回放</p>
 
     <div class="main-layout">
         <div class="canvas-wrap">
@@ -183,9 +240,29 @@
                     <button id="btn-hexagon">六边形</button>
                 </div>
                 <div class="row">
-                    <button id="btn-spawn" class="secondary">🎲 随机生成10个</button>
+                    <button id="btn-spawn" class="secondary">🎲 随机10个</button>
                     <button id="btn-spawn-many" class="secondary">🚀 生成50个</button>
                     <button id="btn-clear" class="secondary">🗑️ 清空</button>
+                </div>
+
+                <h4>压力场景预设</h4>
+                <div class="scenario-grid">
+                    <button class="scenario-btn secondary" data-scenario="circles">
+                        <span class="sc-name">⚪ 圆很多</span>
+                        <span class="sc-desc">80 个小圆，分布均匀</span>
+                    </button>
+                    <button class="scenario-btn secondary" data-scenario="longrects">
+                        <span class="sc-name">▬ 长条矩形</span>
+                        <span class="sc-desc">30 个细长条，跨多格</span>
+                    </button>
+                    <button class="scenario-btn secondary" data-scenario="polygons">
+                        <span class="sc-name">⬡ 凸多边形</span>
+                        <span class="sc-desc">50 个随机多边形</span>
+                    </button>
+                    <button class="scenario-btn secondary" data-scenario="mixed">
+                        <span class="sc-name">🎯 混合密集</span>
+                        <span class="sc-desc">100 个各种形状</span>
+                    </button>
                 </div>
             </div>
 
@@ -213,6 +290,27 @@
                     <button id="btn-grid" class="active">显示网格</button>
                     <button id="btn-normals" class="active">显示法线</button>
                     <button id="btn-aabb" class="secondary">显示AABB</button>
+                </div>
+            </div>
+
+            <!-- 录制回放 -->
+            <div class="panel">
+                <h3>🎬 录制 / 回放</h3>
+                <div class="row">
+                    <button id="btn-record" class="rec">● 录制</button>
+                    <button id="btn-play" class="secondary">▶ 回放</button>
+                    <button id="btn-reset" class="secondary">↺ 复位</button>
+                </div>
+                <div class="playback-controls">
+                    <button id="btn-prev" class="secondary">◀◀</button>
+                    <input type="range" id="playback-slider" min="0" max="0" value="0" step="1" disabled>
+                    <button id="btn-next" class="secondary">▶▶</button>
+                </div>
+                <div class="playback-info" id="playback-info">
+                    状态: 待机 &nbsp;|&nbsp; 帧: 0 / 0
+                </div>
+                <div class="hint">
+                    录制一段碰撞过程后，可逐帧查看法线、穿透深度和候选对变化，对比不同宽阶段策略。
                 </div>
             </div>
 
@@ -248,7 +346,7 @@
                 <h3>🔬 SAT 调试面板
                     <span class="mode-indicator" id="s-mode-indicator" style="display:none;">选中2个物体</span>
                 </h3>
-                <div class="hint">在画布上点击选中两个物体（会高亮），即可查看每条候选轴的详细信息。</div>
+                <div class="hint">在画布上点击选中两个物体（会高亮），即可查看每条候选轴的详细信息。拖动时实时更新。</div>
                 <div class="selected-info" id="s-selected-info" style="display:none;"></div>
                 <div id="sat-axes-container" class="sat-debug" style="margin-top:8px;">
                     <div class="hint" style="text-align:center; color:#555577; padding:20px 0;">
@@ -298,6 +396,149 @@
     // 最近碰撞信息
     let lastCollisionDebug = null;
 
+    // ========= 录制回放 =========
+    const recorder = {
+        recording: false,
+        playing: false,
+        frames: [],
+        currentFrame: 0,
+        playTimer: null,
+        playInterval: 1000 / 60
+    };
+
+    function captureFrame() {
+        const frame = {
+            shapes: world.shapes.map(s => ({
+                id: s.id,
+                type: s.getType(),
+                x: s.position.x,
+                y: s.position.y,
+                vx: s.velocity.x,
+                vy: s.velocity.y,
+                radius: s.radius,
+                width: s.width,
+                height: s.height,
+                vertices: s.localVertices ? s.localVertices.map(v => ({ x: v.x, y: v.y })) : null,
+                color: s.color,
+                invMass: s.invMass,
+                restitution: s.restitution
+            })),
+            stats: { ...world.getStats() }
+        };
+        return frame;
+    }
+
+    function restoreFrame(frame) {
+        world.clear();
+        for (const fd of frame.shapes) {
+            let s;
+            const pos = new P.Vector2(fd.x, fd.y);
+            switch (fd.type) {
+                case 'Circle':
+                    s = new P.Circle(pos, fd.radius);
+                    break;
+                case 'Rectangle':
+                    s = new P.Rectangle(pos, fd.width, fd.height);
+                    break;
+                case 'Polygon':
+                    const verts = fd.vertices.map(v => new P.Vector2(v.x, v.y));
+                    s = new P.Polygon(pos, verts);
+                    break;
+            }
+            if (s) {
+                s.velocity = new P.Vector2(fd.vx, fd.vy);
+                s.color = fd.color;
+                s.invMass = fd.invMass;
+                s.restitution = fd.restitution;
+                world.addShape(s);
+            }
+        }
+        // 重新选中
+        selectedShapes.length = 0;
+    }
+
+    function updatePlaybackUI() {
+        const info = document.getElementById('playback-info');
+        const slider = document.getElementById('playback-slider');
+        const btnRec = document.getElementById('btn-record');
+        const btnPlay = document.getElementById('btn-play');
+
+        slider.max = Math.max(0, recorder.frames.length - 1);
+        slider.value = Math.min(recorder.currentFrame, slider.max);
+        slider.disabled = recorder.frames.length === 0 || recorder.recording;
+
+        let status = '待机';
+        if (recorder.recording) status = '<span class="tag rec">录制中</span>';
+        else if (recorder.playing) status = '<span class="tag play">回放中</span>';
+        else if (recorder.frames.length > 0) status = '<span class="tag pause">已录制</span>';
+
+        info.innerHTML = `状态: ${status} &nbsp;|&nbsp; 帧: ${recorder.currentFrame + 1} / ${recorder.frames.length}`;
+
+        btnRec.textContent = recorder.recording ? '■ 停止' : '● 录制';
+        btnRec.classList.toggle('active', recorder.recording);
+        btnPlay.textContent = recorder.playing ? '⏸ 暂停' : '▶ 回放';
+    }
+
+    function startPlayback() {
+        if (recorder.frames.length === 0) return;
+        if (recorder.playing) { stopPlayback(); return; }
+        if (recorder.currentFrame >= recorder.frames.length - 1) {
+            recorder.currentFrame = 0;
+        }
+        recorder.playing = true;
+        paused = true;
+        updatePlaybackUI();
+        playNextFrame();
+    }
+
+    function playNextFrame() {
+        if (!recorder.playing) return;
+        if (recorder.currentFrame < recorder.frames.length) {
+            restoreFrame(recorder.frames[recorder.currentFrame]);
+            updateStatsFromFrame(recorder.frames[recorder.currentFrame]);
+            updateSatDebug();
+            updatePlaybackUI();
+            recorder.currentFrame++;
+            recorder.playTimer = setTimeout(playNextFrame, recorder.playInterval);
+        } else {
+            stopPlayback();
+        }
+    }
+
+    function stopPlayback() {
+        recorder.playing = false;
+        if (recorder.playTimer) {
+            clearTimeout(recorder.playTimer);
+            recorder.playTimer = null;
+        }
+        updatePlaybackUI();
+    }
+
+    function seekFrame(idx) {
+        if (idx < 0 || idx >= recorder.frames.length) return;
+        recorder.currentFrame = idx;
+        restoreFrame(recorder.frames[idx]);
+        updateStatsFromFrame(recorder.frames[idx]);
+        updateSatDebug();
+        updatePlaybackUI();
+    }
+
+    function updateStatsFromFrame(frame) {
+        const stats = frame.stats;
+        document.getElementById('s-shapes').textContent = stats.totalShapes;
+        document.getElementById('s-collisions').textContent = stats.collisions;
+        document.getElementById('s-broad').textContent = stats.broadPhasePairs;
+        document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
+        document.getElementById('s-grid-time').textContent = (stats.broadPhaseTime + stats.narrowPhaseTime).toFixed(2) + 'ms';
+        document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
+        document.getElementById('s-brute-time').textContent = stats.bruteForceTime.toFixed(2) + 'ms';
+        document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
+        const speedup = stats.bruteForceTime > 0 ? (stats.bruteForceTime / Math.max(stats.broadPhaseTime + stats.narrowPhaseTime, 0.01)) : 1;
+        document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
+        const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
+        document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+    }
+
     // ========= 工具函数 =========
     function polyVerts(sides, radius) {
         const arr = [];
@@ -306,6 +547,17 @@
             arr.push(new P.Vector2(Math.cos(a) * radius, Math.sin(a) * radius));
         }
         return arr;
+    }
+
+    function randomConvexVerts(minSides=3, maxSides=8, avgRadius=25) {
+        const sides = Math.floor(minSides + Math.random() * (maxSides - minSides + 1));
+        const verts = [];
+        for (let i = 0; i < sides; i++) {
+            const a = (i / sides) * Math.PI * 2 - Math.PI / 2 + (Math.random() - 0.5) * 0.3;
+            const r = avgRadius * (0.7 + Math.random() * 0.6);
+            verts.push(new P.Vector2(Math.cos(a) * r, Math.sin(a) * r));
+        }
+        return verts;
     }
 
     function createShape(type, x, y) {
@@ -323,6 +575,99 @@
         s.color = `hsl(${Math.random() * 360}, 65%, 60%)`;
         s.velocity = new P.Vector2((Math.random() - 0.5) * 160, (Math.random() - 0.5) * 160);
         return s;
+    }
+
+    function loadScenario(name) {
+        world.clear();
+        selectedShapes.length = 0;
+        const padding = 60;
+
+        switch (name) {
+            case 'circles':
+                for (let i = 0; i < 80; i++) {
+                    const r = 10 + Math.random() * 14;
+                    const s = new P.Circle(
+                        new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                       padding + Math.random() * (H - padding * 2)),
+                        r
+                    );
+                    s.invMass = 1;
+                    s.restitution = 0.6;
+                    s.color = `hsl(${180 + Math.random() * 60}, 70%, 60%)`;
+                    s.velocity = new P.Vector2((Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120);
+                    world.addShape(s);
+                }
+                break;
+
+            case 'longrects':
+                for (let i = 0; i < 30; i++) {
+                    const horizontal = Math.random() > 0.5;
+                    const w = horizontal ? 150 + Math.random() * 120 : 30 + Math.random() * 40;
+                    const h = horizontal ? 20 + Math.random() * 20 : 120 + Math.random() * 100;
+                    const s = new P.Rectangle(
+                        new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                       padding + Math.random() * (H - padding * 2)),
+                        w, h
+                    );
+                    s.invMass = 1;
+                    s.restitution = 0.5;
+                    s.color = `hsl(${280 + Math.random() * 40}, 60%, 60%)`;
+                    s.velocity = new P.Vector2((Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80);
+                    world.addShape(s);
+                }
+                break;
+
+            case 'polygons':
+                for (let i = 0; i < 50; i++) {
+                    const verts = randomConvexVerts(3, 7, 18 + Math.random() * 15);
+                    const s = new P.Polygon(
+                        new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                       padding + Math.random() * (H - padding * 2)),
+                        verts
+                    );
+                    s.invMass = 1;
+                    s.restitution = 0.55;
+                    s.color = `hsl(${40 + Math.random() * 50}, 70%, 60%)`;
+                    s.velocity = new P.Vector2((Math.random() - 0.5) * 100, (Math.random() - 0.5) * 100);
+                    world.addShape(s);
+                }
+                break;
+
+            case 'mixed':
+                for (let i = 0; i < 100; i++) {
+                    const r = Math.random();
+                    let s;
+                    if (r < 0.4) {
+                        s = new P.Circle(
+                            new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                           padding + Math.random() * (H - padding * 2)),
+                            10 + Math.random() * 15
+                        );
+                    } else if (r < 0.65) {
+                        s = new P.Rectangle(
+                            new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                           padding + Math.random() * (H - padding * 2)),
+                            30 + Math.random() * 50,
+                            25 + Math.random() * 35
+                        );
+                    } else {
+                        const verts = randomConvexVerts(3, 7, 15 + Math.random() * 15);
+                        s = new P.Polygon(
+                            new P.Vector2(padding + Math.random() * (W - padding * 2),
+                                           padding + Math.random() * (H - padding * 2)),
+                            verts
+                        );
+                    }
+                    s.invMass = 1;
+                    s.restitution = 0.55;
+                    s.color = `hsl(${Math.random() * 360}, 65%, 60%)`;
+                    s.velocity = new P.Vector2((Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120);
+                    world.addShape(s);
+                }
+                break;
+        }
+
+        updateSatDebug();
     }
 
     function getShapeAt(x, y) {
@@ -385,7 +730,6 @@
             const status = ax.separated ? '<span style="color:#f87171;">分离</span>'
                            : (isMin ? '<span style="color:#4ade80;">最小</span>' : '<span style="color:#fbbf24;">重叠</span>');
 
-            // 生成投影条可视化
             let projHtml = '';
             if (ax.projA && ax.projB) {
                 const pmin = Math.min(ax.projA.min, ax.projB.min);
@@ -421,12 +765,14 @@
             ${debug.collision ? `
                 <br><strong>最小穿透轴 (${debug.minAxisIndex}):</strong> (${debug.normal.x.toFixed(4)}, ${debug.normal.y.toFixed(4)})
                 <br><strong>穿透深度：</strong> <span style="color:#4ade80; font-weight:bold;">${debug.depth.toFixed(4)}</span>
-            ` : ''}
+            ` : `
+                <br><strong>候选轴总数：</strong> ${debug.axes.length}
+                <br><strong>分离轴：</strong> ${debug.axes.filter(a => a.separated).length} 条
+            `}
         </div>`;
 
         container.innerHTML = html;
 
-        // 更新最近碰撞详情
         const lc = document.getElementById('s-last-collision');
         if (debug.collision) {
             lc.innerHTML = `<strong style="color:#f87171;">检测到碰撞！</strong><br>
@@ -434,7 +780,7 @@
                 穿透深度: <span style="color:#4ade80; font-weight:bold;">${debug.depth.toFixed(4)}</span><br>
                 候选轴数: ${debug.axes.length}, 最小轴索引: ${debug.minAxisIndex}`;
         } else {
-            lc.innerHTML = `<span style="color:#888;">两物体未碰撞</span><br>候选轴数: ${debug.axes.length}`;
+            lc.innerHTML = `<span style="color:#888;">两物体未碰撞</span><br>候选轴数: ${debug.axes.length}, 分离轴: ${debug.axes.filter(a => a.separated).length} 条`;
         }
     }
 
@@ -461,7 +807,6 @@
     function drawShape(s, isColliding, normal) {
         ctx.save();
 
-        // 选中高亮
         const isSelected = selectedShapes.includes(s);
         let strokeColor = s.color || '#00e5ff';
         let lineW = 2;
@@ -490,7 +835,6 @@
 
         drawAABB(s);
 
-        // 碰撞法线
         if (isColliding && normal && showNormals) {
             ctx.strokeStyle = '#4ade80';
             ctx.lineWidth = 2;
@@ -498,7 +842,6 @@
             ctx.moveTo(s.position.x, s.position.y);
             ctx.lineTo(s.position.x + normal.x * 35, s.position.y + normal.y * 35);
             ctx.stroke();
-            // 箭头
             const ang = Math.atan2(normal.y, normal.x);
             ctx.beginPath();
             ctx.moveTo(s.position.x + normal.x * 35, s.position.y + normal.y * 35);
@@ -514,14 +857,12 @@
             ctx.arc(s.position.x, s.position.y, 4, 0, Math.PI * 2);
             ctx.fill();
 
-            // 显示穿透深度
             ctx.fillStyle = '#4ade80';
             ctx.font = 'bold 11px sans-serif';
             ctx.fillText(`depth: ${s._lastDepth ? s._lastDepth.toFixed(2) : ''}`,
                          s.position.x + 10, s.position.y - 10);
         }
 
-        // ID 标签
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.font = '10px sans-serif';
         ctx.fillText(`#${s.id} ${s.getType()[0]}`, s.position.x + 4, s.position.y + 4);
@@ -533,33 +874,53 @@
         if (selectedShapes.length < 2) return;
         const [a, b] = selectedShapes;
         const debug = P.detectCollisionDebug(a, b);
-        if (!debug.collision) return;
 
-        // 画最小穿透轴
-        ctx.strokeStyle = 'rgba(251, 191, 36, 0.6)';
+        ctx.save();
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 4]);
 
-        const mid = a.position.add(b.position).mul(0.5);
-        const n = debug.normal;
-        const scale = 120;
-        ctx.beginPath();
-        ctx.moveTo(mid.x - n.x * scale, mid.y - n.y * scale);
-        ctx.lineTo(mid.x + n.x * scale, mid.y + n.y * scale);
-        ctx.stroke();
-        ctx.setLineDash([]);
+        if (debug.collision) {
+            ctx.strokeStyle = 'rgba(251, 191, 36, 0.7)';
+            const mid = a.position.add(b.position).mul(0.5);
+            const n = debug.normal;
+            const scale = 120;
+            ctx.beginPath();
+            ctx.moveTo(mid.x - n.x * scale, mid.y - n.y * scale);
+            ctx.lineTo(mid.x + n.x * scale, mid.y + n.y * scale);
+            ctx.stroke();
+            ctx.setLineDash([]);
 
-        ctx.fillStyle = '#fbbf24';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText(`最小穿透轴 (depth=${debug.depth.toFixed(2)})`,
-                     mid.x + n.x * scale + 5, mid.y + n.y * scale);
+            ctx.fillStyle = '#fbbf24';
+            ctx.font = 'bold 12px sans-serif';
+            ctx.fillText(`最小穿透轴 (depth=${debug.depth.toFixed(2)})`,
+                         mid.x + n.x * scale + 5, mid.y + n.y * scale);
+        } else {
+            ctx.strokeStyle = 'rgba(100, 180, 255, 0.5)';
+            const mid = a.position.add(b.position).mul(0.5);
+            for (let i = 0; i < debug.axes.length; i++) {
+                if (debug.axes[i].separated) {
+                    const ax = debug.axes[i].axis;
+                    const scale = 80;
+                    ctx.beginPath();
+                    ctx.moveTo(mid.x - ax.x * scale, mid.y - ax.y * scale);
+                    ctx.lineTo(mid.x + ax.x * scale, mid.y + ax.y * scale);
+                    ctx.stroke();
+                    break;
+                }
+            }
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#88aaff';
+            ctx.font = '11px sans-serif';
+            ctx.fillText('已分离（蓝线=第一条分离轴）', mid.x + 10, mid.y - 10);
+        }
+
+        ctx.restore();
     }
 
     function draw() {
         ctx.clearRect(0, 0, W, H);
         drawGrid();
 
-        // 收集碰撞信息
         const colliding = new Map();
         const pairs = world.spatialGrid.getPotentialCollisions();
         for (const pair of pairs) {
@@ -579,25 +940,27 @@
 
         drawSATDebugLines();
 
-        // 更新统计
-        const stats = world.getStats();
-        document.getElementById('s-shapes').textContent = stats.totalShapes;
-        document.getElementById('s-collisions').textContent = stats.collisions;
-        document.getElementById('s-broad').textContent = stats.broadPhasePairs;
-        document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
+        if (!recorder.playing) {
+            const stats = world.getStats();
+            document.getElementById('s-shapes').textContent = stats.totalShapes;
+            document.getElementById('s-collisions').textContent = stats.collisions;
+            document.getElementById('s-broad').textContent = stats.broadPhasePairs;
+            document.getElementById('s-narrow').textContent = stats.narrowPhaseTests;
 
-        document.getElementById('s-grid-time').textContent = (stats.broadPhaseTime + stats.narrowPhaseTime).toFixed(2) + 'ms';
-        document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
-        document.getElementById('s-brute-time').textContent = stats.bruteForceTime.toFixed(2) + 'ms';
-        document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
+            document.getElementById('s-grid-time').textContent = (stats.broadPhaseTime + stats.narrowPhaseTime).toFixed(2) + 'ms';
+            document.getElementById('s-grid-pairs').textContent = stats.broadPhasePairs + ' 对';
+            document.getElementById('s-brute-time').textContent = stats.bruteForceTime.toFixed(2) + 'ms';
+            document.getElementById('s-brute-pairs').textContent = stats.bruteForcePairs + ' 对';
 
-        const speedup = stats.bruteForceTime > 0 ? (stats.bruteForceTime / Math.max(stats.broadPhaseTime + stats.narrowPhaseTime, 0.01)) : 1;
-        document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
-        const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
-        document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+            const speedup = stats.bruteForceTime > 0 ? (stats.bruteForceTime / Math.max(stats.broadPhaseTime + stats.narrowPhaseTime, 0.01)) : 1;
+            document.getElementById('s-speedup').textContent = speedup.toFixed(2) + 'x';
+            const reduction = stats.bruteForcePairs > 0 ? (1 - stats.broadPhasePairs / stats.bruteForcePairs) * 100 : 0;
+            document.getElementById('s-reduction').textContent = reduction.toFixed(1) + '%';
+        }
     }
 
     function update() {
+        if (recorder.recording || recorder.playing) return;
         if (paused && !stepOnce) return;
         stepOnce = false;
 
@@ -614,6 +977,11 @@
 
     function loop() {
         update();
+        if (recorder.recording) {
+            recorder.frames.push(captureFrame());
+            recorder.currentFrame = recorder.frames.length - 1;
+            updatePlaybackUI();
+        }
         draw();
         requestAnimationFrame(loop);
     }
@@ -645,7 +1013,9 @@
             const pos = getMouse(e);
             dragging.position.x = pos.x - dragOffset.x;
             dragging.position.y = pos.y - dragOffset.y;
-            if (selectedShapes.length === 2) updateSatDebug();
+            if (selectedShapes.length === 2) {
+                updateSatDebug();
+            }
         }
     });
 
@@ -654,11 +1024,9 @@
         const dt = Date.now() - mouseDownTime;
         const moved = mouseDownPos ? Math.hypot(pos.x - mouseDownPos.x, pos.y - mouseDownPos.y) : 0;
 
-        // 短时间点击且未移动 => 选中
         if (dragging && dt < 250 && moved < 5) {
             toggleSelect(dragging);
         } else if (!dragging && dt < 250) {
-            // 点击空白处 => 创建物体
             const ns = createShape(currentShape, pos.x, pos.y);
             world.addShape(ns);
         }
@@ -705,6 +1073,19 @@
         world.clear();
         selectedShapes.length = 0;
         updateSatDebug();
+        recorder.frames = [];
+        recorder.currentFrame = 0;
+        updatePlaybackUI();
+    });
+
+    // 场景预设
+    document.querySelectorAll('.scenario-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            loadScenario(btn.dataset.scenario);
+            recorder.frames = [];
+            recorder.currentFrame = 0;
+            updatePlaybackUI();
+        });
     });
 
     // 修正模式
@@ -737,6 +1118,7 @@
         e.target.classList.toggle('active');
     });
     document.getElementById('btn-pause').addEventListener('click', (e) => {
+        if (recorder.playing) { stopPlayback(); return; }
         paused = !paused;
         e.target.classList.toggle('active');
         e.target.textContent = paused ? '▶️ 继续' : '⏸️ 暂停';
@@ -757,6 +1139,50 @@
         e.target.classList.toggle('active');
     });
 
+    // 录制回放
+    document.getElementById('btn-record').addEventListener('click', () => {
+        if (recorder.playing) stopPlayback();
+        if (recorder.recording) {
+            recorder.recording = false;
+        } else {
+            recorder.frames = [];
+            recorder.currentFrame = 0;
+            recorder.recording = true;
+            paused = false;
+        }
+        updatePlaybackUI();
+    });
+
+    document.getElementById('btn-play').addEventListener('click', startPlayback);
+
+    document.getElementById('btn-reset').addEventListener('click', () => {
+        stopPlayback();
+        recorder.frames = [];
+        recorder.currentFrame = 0;
+        updatePlaybackUI();
+    });
+
+    document.getElementById('btn-prev').addEventListener('click', () => {
+        if (recorder.frames.length === 0) return;
+        stopPlayback();
+        paused = true;
+        seekFrame(Math.max(0, recorder.currentFrame - 1));
+    });
+
+    document.getElementById('btn-next').addEventListener('click', () => {
+        if (recorder.frames.length === 0) return;
+        stopPlayback();
+        paused = true;
+        seekFrame(Math.min(recorder.frames.length - 1, recorder.currentFrame + 1));
+    });
+
+    document.getElementById('playback-slider').addEventListener('input', (e) => {
+        if (recorder.frames.length === 0) return;
+        stopPlayback();
+        paused = true;
+        seekFrame(parseInt(e.target.value));
+    });
+
     // 初始化一些物体
     for (let i = 0; i < 12; i++) {
         const types = Object.values(typeMap);
@@ -766,6 +1192,7 @@
         world.addShape(s);
     }
 
+    updatePlaybackUI();
     loop();
     </script>
 </body>

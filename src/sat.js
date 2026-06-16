@@ -238,7 +238,8 @@
             shapeA: shapeA,
             shapeB: shapeB,
             axes: [],
-            minAxisIndex: -1
+            minAxisIndex: -1,
+            hasSeparatingAxis: false
         };
 
         const axes = getAxesForShapes(shapeA, shapeB);
@@ -249,6 +250,7 @@
         let minOverlap = Infinity;
         let minAxis = null;
         let minIdx = -1;
+        let separated = false;
 
         for (let i = 0; i < axes.length; i++) {
             const axis = axes[i];
@@ -275,23 +277,23 @@
             if (dist > 0) {
                 axisInfo.separated = true;
                 axisInfo.overlap = 0;
-                debugInfo.axes.push(axisInfo);
-                debugInfo.collision = false;
-                return debugInfo;
+                separated = true;
+            } else {
+                const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
+                axisInfo.overlap = overlap;
+                if (overlap < minOverlap) {
+                    minOverlap = overlap;
+                    minAxis = axis.clone();
+                    minIdx = i;
+                }
             }
 
-            const overlap = Math.min(projA.max, projB.max) - Math.max(projA.min, projB.min);
-            axisInfo.overlap = overlap;
             debugInfo.axes.push(axisInfo);
-
-            if (overlap < minOverlap) {
-                minOverlap = overlap;
-                minAxis = axis.clone();
-                minIdx = i;
-            }
         }
 
-        if (minOverlap < Infinity && minAxis !== null) {
+        debugInfo.hasSeparatingAxis = separated;
+
+        if (!separated && minOverlap < Infinity && minAxis !== null) {
             debugInfo.collision = true;
             debugInfo.depth = minOverlap;
             debugInfo.minAxisIndex = minIdx;
